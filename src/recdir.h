@@ -4,7 +4,7 @@
 typedef struct RECDIR_ *RECDIR;
 
 RECDIR recdiropen(const char *path);
-void recdirclose(RECDIR recdir);
+int recdirclose(RECDIR recdir);
 int recdirread(RECDIR recdir);
 
 #endif

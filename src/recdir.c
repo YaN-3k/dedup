@@ -11,9 +11,10 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#define MAX_DIR_DEPTH 1024
+#define MAX_DIR_DEPTH 128
 
 struct RECDIR_ {
+    int fd;
     size_t size;
     DIR *dirs[MAX_DIR_DEPTH];
 };
@@ -25,17 +26,20 @@ static DIR *recdirtop(RECDIR recdir);
 int
 recdirpush(RECDIR recdir, int fd)
 {
+    DIR *dir;
+
     assert(recdir->size < MAX_DIR_DEPTH);
-    recdir->dirs[recdir->size++] = fdopendir(fd);
-    return errno;
+    dir = fdopendir(fd);
+    if (dir != NULL)
+        recdir->dirs[recdir->size++] = dir;
+    return dir != NULL;
 }
 
 int
 recdirpop(RECDIR recdir)
 {
     assert(recdir->size > 0);
-    closedir(recdir->dirs[--recdir->size]);
-    return errno != 0;
+    return closedir(recdir->dirs[--recdir->size]);
 }
 
 DIR *
@@ -51,6 +55,7 @@ recdiropen(const char *path)
 
     recdir = malloc(sizeof(struct RECDIR_));
     memset(recdir, 0, sizeof(struct RECDIR_));
+    recdir->fd = -1;
 
     recdir->dirs[recdir->size++] = opendir(path);
     if (errno != 0) {
@@ -61,10 +66,13 @@ recdiropen(const char *path)
     return recdir;
 }
 
-void
+int
 recdirclose(RECDIR recdir)
 {
+    if (recdir->fd != -1 && close(recdir->fd) != 0)
+        return -1;
     free(recdir);
+    return 0;
 }
 
 int
@@ -73,35 +81,46 @@ recdirread(RECDIR recdir)
     struct dirent *ent;
     DIR *top;
     int dir_fd;
-    int fd;
+    int sub_fd;
 
-    if (recdir->size == 0)
+    if (recdir->fd != -1 && close(recdir->fd) != 0)
         return -1;
 
-    do {
+    while (1) {
         top = recdirtop(recdir);
         dir_fd = dirfd(top);
+
         while ((ent = readdir(top)) != NULL &&
                (strcmp(ent->d_name, ".") == 0 ||
                 strcmp(ent->d_name, "..") == 0));
 
-        if (errno != 0)
-            return -1;
 
-        if (ent == NULL) {
-            recdirpop(recdir);
+        if (errno != 0 || ent == NULL) {
+            errno = 0;
+            if (recdirpop(recdir))
+                return -1;
             if (recdir->size == 0)
                 return -1;
-        } else if (ent->d_type == DT_DIR) {
-            fd = openat(dir_fd, ent->d_name, O_RDONLY);
-            if (errno != 0)
-                return -1;
-            recdirpush(recdir, fd);
-            if (errno != 0)
-                return -1;
+            continue;
         }
-    } while (ent == NULL || ent->d_type != DT_REG);
-    
-    printf("%s\n", ent->d_name);
-    return openat(dir_fd, ent->d_name, O_RDONLY);
+
+        switch (ent->d_type) {
+        case DT_DIR:
+            if ((sub_fd = openat(dir_fd, ent->d_name, O_RDONLY)) == -1) {
+                errno = 0;
+                continue;
+            }
+            if (recdirpush(recdir, sub_fd) != 0) {
+                errno = 0;
+                continue;
+            }
+            break;
+        case DT_REG:
+            if ((recdir->fd = openat(dir_fd, ent->d_name, O_RDONLY)) == -1) {
+                errno = 0;
+                continue;
+            }
+            return recdir->fd;
+        }
+    }
 }

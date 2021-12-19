@@ -1,18 +1,30 @@
-CPPFLAGS = -D_DEFAULT_SOURCE
-CFLAGS = -Wall -Wextra -pedantic -std=c11 -ggdb ${CPPFLAGS}
-LDFLAGS =
+include config.mk
 
-src = main.c recdir.c util.c
-obj = $(src:.c=.o)
-bin = dirs
+src := $(shell find $(src_dir) -name '*.c')
+obj := $(src:$(src_dir)/%.c=$(bin_dir)/%.o)
+dep := $(obj:.o=.d)
+
+all: options $(bin)
+
+options:
+	@echo "# CFLAGS   = ${CFLAGS}"
+	@echo "# LDFLAGS  = ${LDFLAGS}"
+	@echo "# CC       = ${CC}"
+
+$(bin_dir)/%.o: $(src_dir)/%.c
+	@echo $(cmd_cc)
+	$(Q)mkdir -p $(dir $@)
+	@$(CC) -c -o $@ $(CFLAGS) $<
+
+$(obj): config.mk
 
 $(bin): $(obj)
-	$(CC) -o $@ $(obj) $(LDFLAGS)
-
-.c.o:
-	$(CC) -c -o $@ $< $(CFLAGS)
+	@echo $(cmd_ld)
+	@$(CC) -o $@ $(obj) $(LDFLAGS)
 
 clean:
-	rm -f $(bin) $(obj)
+	rm -f $(obj) ${dep} $(bin)
 
-.PHONY: clean
+-include $(dep)
+
+.PHONY: all options clean
