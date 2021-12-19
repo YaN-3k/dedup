@@ -1,10 +1,12 @@
 #ifndef RECDIR_H__
 #define RECDIR_H__
 
-typedef struct RECDIR_ *RECDIR;
+#include <regex.h>
 
-RECDIR recdiropen(const char *path);
-int recdirclose(RECDIR recdir);
-int recdirread(RECDIR recdir);
+typedef struct RECDIR_ RECDIR;
+
+RECDIR *recdiropen(const char *path, regex_t *exclude_regex, int show_progress);
+int recdirclose(RECDIR *recdir);
+char *recdirread(RECDIR *recdir);
 
 #endif
