@@ -13,37 +13,29 @@
 #include "util.h"
 
 void
-hash_cstr(unsigned char hash[], char buffer[])
-{
-    for (int i = 0; i < SHA256_DIGEST_LENGTH; i++)
-        sprintf(buffer + strlen(buffer), "%x", hash[i]);
-
-}
-
-
-void
 compreg(const char *regstr, regex_t *reg)
 {
     size_t error_len;
-    char *error_buf;
+    char *error_msg;
     int errcode;
 
     if ((errcode = regcomp(reg, regstr, 0)) != 0) {
         error_len = regerror(errcode, reg, NULL, 0);
-        error_buf = alloca(error_len);
-        regerror(errcode, reg, error_buf, error_len);
-        die("ERROR: Could not compile regex %s: %s", regstr, error_buf);
+        error_msg = alloca(error_len);
+        regerror(errcode, reg, error_msg, error_len);
+        die("ERROR: Could not compile regex %s: %s", regstr, error_msg);
     }
 }
 
 int
 main(int argc, char *argv[])
 {
-    unsigned char hash[SHA256_DIGEST_LENGTH];
-    regex_t exclude_reg;
-    char *dpath, *fpath;
+    unsigned char hash[SHA256_LENGTH];
+    char hash_cstr[SHA256_CSTR_LENGTH];
+    int verbose = 2;
     RECDIR *recdir;
-    char buffer[64];
+    regex_t exclude_reg = {0};
+    char *dpath, *fpath;
     FILE *fp;
 
     if (argc < 3 || argc > 4)
@@ -56,24 +48,28 @@ main(int argc, char *argv[])
         die("ERROR: Could not resolve path %s:", argv[1]);
     errno = 0;
 
-    recdir = recdiropen(dpath, argc > 3 ? &exclude_reg : NULL, 1);
+    recdir = recdiropen(dpath, argc > 3 ? &exclude_reg : NULL, verbose);
     free(dpath);
 
     if (recdir == NULL)
         die("ERROR: Could not open directory %s:", argv[1]);
 
     while ((fpath = recdirread(recdir)) != NULL) {
-        fp = fopen(fpath, "r");
+        if ((fp = fopen(fpath, "r")) == NULL)
+            continue;
+
         if (sha256(fp, hash) == 0) {
             fclose(fp);
+            if (verbose > 1)
+                printf("%-50s -- [EMPTY]\n", fpath);
             continue;
         }
-        memset(buffer, 0, sizeof(buffer));
-        hash_cstr(hash, buffer);
-        //for (int i = 0; i < SHA256_DIGEST_LENGTH; i++)
-            //printf("%x", hash[i]);
-        //putchar('\n');
         fclose(fp);
+
+        memset(hash_cstr, 0, sizeof(hash_cstr));
+        hash2cstr(hash, hash_cstr);
+        if (verbose > 1)
+            printf("%-50s -- %s\n", fpath, hash_cstr);
     }
 
     if (errno != 0)

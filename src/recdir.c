@@ -14,7 +14,10 @@
 
 #include "util.h"
 
-#define MAX_DIR_DEPTH 128
+#define RECDIR_REALLOC_SIZE 16
+#define RECDIR_REALLOC(recdir) \
+    erealloc(recdir, sizeof(struct RECDIR_) + \
+                     sizeof(RECDIR_FRAME) * recdir->max_size)
 
 typedef struct {
     char *path;
@@ -23,10 +26,11 @@ typedef struct {
 
 struct RECDIR_ {
     regex_t *exclude_reg;
-    int show_progress;
+    int verbose;
     char *fpath;
     size_t size;
-    RECDIR_FRAME frames[MAX_DIR_DEPTH];
+    size_t max_size;
+    RECDIR_FRAME frames[];
 };
 
 static RECDIR_FRAME *recdirtop(RECDIR *recdir);
@@ -54,16 +58,18 @@ recdirpush(RECDIR *recdir, const char *path)
     char *dpath;
     DIR *dir;
 
-    assert(recdir->size < MAX_DIR_DEPTH);
     dpath = join_path(recdirtop(recdir)->path, path, NULL);
     dir = opendir(dpath);
-    if (dir != NULL) {
-        recdir->size++;
+    if (dir == NULL) {
+        free(dpath);
+    } else {
+        if (++recdir->size == recdir->max_size) {
+            recdir->max_size += RECDIR_REALLOC_SIZE;
+            recdir = RECDIR_REALLOC(recdir);
+        }
         top = recdirtop(recdir);
         top->dir = dir;
         top->path = dpath;
-    } else {
-        free(dpath);
     }
     return dir == NULL;
 }
@@ -72,12 +78,17 @@ int
 recdirpop(RECDIR *recdir)
 {
     RECDIR_FRAME *top;
+    int excode;
 
     assert(recdir->size > 0);
     top = recdirtop(recdir);
-    recdir->size--;
     free(top->path);
-    return closedir(top->dir);
+    excode = closedir(top->dir);
+    if (--recdir->size < recdir->max_size - RECDIR_REALLOC_SIZE) {
+        recdir->max_size -= RECDIR_REALLOC_SIZE;
+        recdir = RECDIR_REALLOC(recdir);
+    }
+    return excode;
 }
 
 RECDIR_FRAME *
@@ -87,16 +98,17 @@ recdirtop(RECDIR *recdir)
 }
 
 RECDIR *
-recdiropen(const char *path, regex_t *exclude_reg, int show_progress)
+recdiropen(const char *path, regex_t *exclude_reg, int verbose)
 {
     RECDIR_FRAME *top;
     RECDIR *recdir;
     DIR *dir;
 
-    recdir = malloc(sizeof(struct RECDIR_));
+    recdir = emalloc(sizeof(struct RECDIR_) + sizeof(RECDIR_FRAME) * RECDIR_REALLOC_SIZE);
     memset(recdir, 0, sizeof(struct RECDIR_));
+    recdir->max_size = RECDIR_REALLOC_SIZE;
     recdir->exclude_reg = exclude_reg;
-    recdir->show_progress = show_progress;
+    recdir->verbose = verbose;
 
     if ((dir = opendir(path)) == NULL) {
         free(recdir);
@@ -108,7 +120,7 @@ recdiropen(const char *path, regex_t *exclude_reg, int show_progress)
     top->dir = dir;
     top->path = strdup(path);
 
-    if (recdir->show_progress)
+    if (recdir->verbose)
         printf("OPEN       %s\n", recdirtop(recdir)->path);
 
     return recdir;
@@ -143,8 +155,8 @@ recdirread(RECDIR *recdir)
 
         if (errno != 0 || ent == NULL) {
             errno = 0;
-            if (recdir->show_progress)
-                printf("CLOSE      %s\n", top->path);
+            if (recdir->verbose)
+                printf("%-10s %s\n", "CLOSE", top->path);
             if (recdirpop(recdir))
                 return NULL;
             if (recdir->size == 0)
@@ -155,8 +167,8 @@ recdirread(RECDIR *recdir)
         if (faccessat(dirfd(top->dir), ent->d_name, R_OK, AT_EACCESS) != 0) {
             dpath = alloca(strlen(top->path) + strlen(ent->d_name) + 2);
             join_path(top->path, ent->d_name, dpath);
-            if (recdir->show_progress)
-                printf("SKIP       %s\n", dpath);
+            if (recdir->verbose)
+                printf("%-10s %s\n", "SKIP", dpath);
             errno = 0;
             continue;
         }
@@ -167,19 +179,19 @@ recdirread(RECDIR *recdir)
                 dpath = alloca(strlen(top->path) + strlen(ent->d_name) + 2);
                 join_path(top->path, ent->d_name, dpath);
                 if (regexec(recdir->exclude_reg, dpath, 0, NULL, 0) == 0) {
-                    if (recdir->show_progress)
-                        printf("SKIP       %s\n", dpath);
+                    if (recdir->verbose)
+                        printf("%-10s %s\n", "SKIP", dpath);
                     continue;
                 }   
             }
             if (recdirpush(recdir, ent->d_name) != 0) {
                 errno = 0;
-                if (recdir->show_progress)
-                    printf("SKIP       %s\n", top->path);
+                if (recdir->verbose)
+                    printf("%-10s %s\n", "SKIP", top->path);
                 continue;
             }
-            if (recdir->show_progress)
-                printf("OPEN       %s\n", recdirtop(recdir)->path);
+            if (recdir->verbose)
+                printf("%-10s %s\n", "OPEN", recdirtop(recdir)->path);
             break;
         case DT_REG:
             recdir->fpath = join_path(top->path, ent->d_name, NULL);

@@ -5,8 +5,18 @@
 
 #include <openssl/sha.h>
 
+void
+hash2cstr(unsigned char hash[static SHA256_LENGTH],
+          char cstr[static SHA256_CSTR_LENGTH])
+{
+    int n = 0;
+
+    for (int i = 0; i < SHA256_LENGTH; i++)
+        n += sprintf(cstr + n, "%x", hash[i]);
+}
+
 int
-sha256(FILE *fp, unsigned char hash[])
+sha256(FILE *fp, unsigned char hash[static SHA256_LENGTH])
 {
     char buffer[1024];
     size_t bytes;
