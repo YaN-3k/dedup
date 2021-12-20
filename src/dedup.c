@@ -20,8 +20,8 @@ main(int argc, char *argv[])
     Args args = {0};
     unsigned char hash[SHA256_LENGTH];
     char hash_cstr[SHA256_CSTR_LENGTH];
+    size_t nbytes, fcount = 0;
     char data[1024];
-    size_t nbytes;
     char *fpath;
     FILE *fp;
 
@@ -36,6 +36,7 @@ main(int argc, char *argv[])
         if ((fp = fopen(fpath, "r")) == NULL)
             continue;
 
+        fcount++;
         memset(data, 0, sizeof(data));
         nbytes = fread(data, 1, sizeof(data), fp);
         fclose(fp);
@@ -54,6 +55,8 @@ main(int argc, char *argv[])
 
     recdirclose(recdir);
     argsfree(&args);
+
+    printf("[ opened: %ld | excluded: 20 | skipped: 10 | readed: 20 ]\n", fcount);
 
     return 0;
 }

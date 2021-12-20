@@ -9,9 +9,15 @@
 
 #include "util.h"
 
-static void compreg(const char *regstr, regex_t *reg);
-static int isnumber(const char *str);
 static void usage(const char *argv0);
+static int isnumber(const char *str);
+static void compreg(const char *regstr, regex_t *reg);
+
+void
+usage(const char *argv0)
+{
+    die("usage: %s [-v] directory [-e exclude]", argv0);
+}
 
 int
 isnumber(const char *str)
@@ -21,24 +27,17 @@ isnumber(const char *str)
 }
 
 void
-usage(const char *argv0)
-{
-    die("usage: %s [-v] directory [-e exclude]", argv0);
-}
-
-
-void
 compreg(const char *regstr, regex_t *reg)
 {
-    size_t error_len;
-    char *error_msg;
+    size_t errlen;
+    char *errmsg;
     int errcode;
 
     if ((errcode = regcomp(reg, regstr, 0)) != 0) {
-        error_len = regerror(errcode, reg, NULL, 0);
-        error_msg = alloca(error_len);
-        regerror(errcode, reg, error_msg, error_len);
-        die("%s: %s", regstr, error_msg);
+        errlen = regerror(errcode, reg, NULL, 0);
+        errmsg = alloca(errlen);
+        regerror(errcode, reg, errmsg, errlen);
+        die("%s: %s", regstr, errmsg);
     }
 }
 

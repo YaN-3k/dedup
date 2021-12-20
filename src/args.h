@@ -9,9 +9,9 @@ enum {
 };
 
 typedef struct {
+    regex_t *exclude_reg;
     const char *path;
     const char *db;
-    regex_t *exclude_reg;
     int realpath;
     int verbose;
 } Args;

@@ -15,10 +15,18 @@
 #include "util.h"
 #include "args.h"
 
-#define RECDIR_REALLOC_SIZE 16
-#define RECDIR_REALLOC(recdir) \
-    erealloc(recdir, sizeof(struct RECDIR_) + \
-                     sizeof(RECDIR_FRAME) * recdir->max_size)
+#define FRAMES_REALLOC_SIZE 16
+#define FRAMES_REALLOC(frames) \
+        erealloc(frames, sizeof(RECDIR_FRAME) * recdir->max_size);
+
+#define RECDIR_LOG(t, f) if (recdir->fmt) printf(recdir->fmt, t, f);
+
+/* TODO: summary for recdir */
+typedef struct {
+    int excluded;
+    int skipped;
+    int opened;
+} RECDIR_COUNT;
 
 typedef struct {
     char *path;
@@ -31,7 +39,7 @@ struct RECDIR_ {
     char *fpath;
     size_t size;
     size_t max_size;
-    RECDIR_FRAME frames[126];
+    RECDIR_FRAME *frames;
 };
 
 static RECDIR_FRAME *recdirtop(RECDIR *recdir);
@@ -42,12 +50,11 @@ static char *join_path(const char *p1, const char *p2, char *joined);
 char *
 join_path(const char *p1, const char *p2, char *joined)
 {
-    int p1_len = strlen(p1);
+    int p1len = strlen(p1);
     const char *fmt;
 
-    if (joined == NULL)
-        joined = emalloc(p1_len + strlen(p2) + 2);
-    fmt = p1[p1_len - 1] != '/' ? "%s/%s" : "%s%s";
+    if (joined == NULL) joined = emalloc(p1len + strlen(p2) + 2);
+    fmt = p1[p1len - 1] != '/' ? "%s/%s" : "%s%s";
     sprintf(joined, fmt, p1, p2);
     return joined;
 }
@@ -64,13 +71,10 @@ recdirpush(RECDIR *recdir, const char *path)
     if (dir == NULL) {
         free(dpath);
     } else {
-        recdir->size++;
-        /*
         if (++recdir->size == recdir->max_size) {
-            recdir->max_size += RECDIR_REALLOC_SIZE;
-            recdir = RECDIR_REALLOC(recdir);
+            recdir->max_size += FRAMES_REALLOC_SIZE;
+            recdir->frames = FRAMES_REALLOC(recdir->frames);
         }
-        */
         top = recdirtop(recdir);
         top->dir = dir;
         top->path = dpath;
@@ -88,13 +92,10 @@ recdirpop(RECDIR *recdir)
     top = recdirtop(recdir);
     free(top->path);
     excode = closedir(top->dir);
-    recdir->size--;
-    /*
-    if (--recdir->size < recdir->max_size - RECDIR_REALLOC_SIZE) {
-        recdir->max_size -= RECDIR_REALLOC_SIZE;
-        recdir = RECDIR_REALLOC(recdir);
+    if (--recdir->size < recdir->max_size - FRAMES_REALLOC_SIZE) {
+        recdir->max_size -= FRAMES_REALLOC_SIZE;
+        recdir->frames = FRAMES_REALLOC(recdir->frames);
     }
-    */
     return excode;
 }
 
@@ -111,10 +112,13 @@ recdiropen(const char *path, regex_t *exclude_reg, int verbose)
     RECDIR *recdir;
     DIR *dir;
 
-    recdir = emalloc(sizeof(struct RECDIR_));  // + sizeof(RECDIR_FRAME) * RECDIR_REALLOC_SIZE);
+    recdir = emalloc(sizeof(struct RECDIR_));
     memset(recdir, 0, sizeof(struct RECDIR_));
-    recdir->max_size = RECDIR_REALLOC_SIZE;
+
+    recdir->max_size = FRAMES_REALLOC_SIZE;
+    recdir->frames = FRAMES_REALLOC(recdir->frames);
     recdir->exclude_reg = exclude_reg;
+
     if (verbose & VERBOSE_STACK)
         recdir->fmt = (verbose & VERBOSE_HASH) ? "%-64s %s\n" : "%-10s %s\n";
 
@@ -128,8 +132,7 @@ recdiropen(const char *path, regex_t *exclude_reg, int verbose)
     top->dir = dir;
     top->path = strdup(path);
 
-    if (recdir->fmt)
-        printf(recdir->fmt, "OPEN", recdirtop(recdir)->path);
+    RECDIR_LOG("OPEN", top->path);
 
     return recdir;
 }
@@ -137,6 +140,7 @@ recdiropen(const char *path, regex_t *exclude_reg, int verbose)
 void
 recdirclose(RECDIR *recdir)
 {
+    free(recdir->frames);
     free(recdir);
 }
 
@@ -145,7 +149,7 @@ recdirread(RECDIR *recdir)
 {
     struct dirent *ent;
     RECDIR_FRAME *top;
-    char *dpath;
+    char *path;
 
     if (recdir->fpath != NULL) {
         free(recdir->fpath);
@@ -162,47 +166,42 @@ recdirread(RECDIR *recdir)
 
         if (errno != 0 || ent == NULL) {
             errno = 0;
-            if (recdir->fmt)
-                printf(recdir->fmt, "CLOSE", top->path);
-            if (recdirpop(recdir))
-                return NULL;
-            if (recdir->size == 0)
+            RECDIR_LOG("CLOSE", top->path);
+            if (recdirpop(recdir) || recdir->size == 0)
                 return NULL;
             continue;
         }
 
-        if (faccessat(dirfd(top->dir), ent->d_name, R_OK, AT_EACCESS) != 0) {
-            dpath = alloca(strlen(top->path) + strlen(ent->d_name) + 2);
-            join_path(top->path, ent->d_name, dpath);
-            if (recdir->fmt)
-                printf(recdir->fmt, "SKIP", dpath);
+        path = alloca(strlen(top->path) + strlen(ent->d_name) + 2);
+        join_path(top->path, ent->d_name, path);
+
+        if (access(path, R_OK) != 0) {
+            RECDIR_LOG("SKIP [P]", path);
             errno = 0;
             continue;
         }
 
         switch (ent->d_type) {
         case DT_DIR:
-            if (recdir->exclude_reg != NULL) {
-                dpath = alloca(strlen(top->path) + strlen(ent->d_name) + 2);
-                join_path(top->path, ent->d_name, dpath);
-                if (regexec(recdir->exclude_reg, dpath, 0, NULL, 0) == 0) {
-                    if (recdir->fmt)
-                        printf(recdir->fmt, "SKIP", dpath);
-                    continue;
-                }   
+            if (recdir->exclude_reg != NULL &&
+                regexec(recdir->exclude_reg, path, 0, NULL, 0) == 0) {
+                RECDIR_LOG("EXCLUDE", path);
+                continue;
             }
             if (recdirpush(recdir, ent->d_name) != 0) {
                 errno = 0;
-                if (recdir->fmt)
-                    printf(recdir->fmt, "SKIP", top->path);
+                RECDIR_LOG("SKIP [E]", path);
+                assert(0 && "UNREACHABLE?");
                 continue;
             }
-            if (recdir->fmt)
-                printf(recdir->fmt, "OPEN", recdirtop(recdir)->path);
+            RECDIR_LOG("OPEN", recdirtop(recdir)->path);
             break;
         case DT_REG:
             recdir->fpath = join_path(top->path, ent->d_name, NULL);
             return recdir->fpath;
+        default:
+            /* TODO: handle for symlinks */
+            RECDIR_LOG("SKIP [T]", path);
         }
     }
 }

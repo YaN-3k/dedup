@@ -19,7 +19,7 @@ verbose_cmd_cc  = $(CC) -c -o $@ $(CFLAGS) $<
 verbose_cmd_ld  = $(CC) -c -o $@ $(LDFLAGS) $^
 
 ifndef build
-	build := release
+	build := debug
 endif
 
 CFLAGS += $(cflags_$(build))
