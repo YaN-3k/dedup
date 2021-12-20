@@ -13,49 +13,24 @@
 #include "args.h"
 #include "util.h"
 
-static void compreg(const char *regstr, regex_t *reg);
-
-void
-compreg(const char *regstr, regex_t *reg)
-{
-    size_t error_len;
-    char *error_msg;
-    int errcode;
-
-    if ((errcode = regcomp(reg, regstr, 0)) != 0) {
-        error_len = regerror(errcode, reg, NULL, 0);
-        error_msg = alloca(error_len);
-        regerror(errcode, reg, error_msg, error_len);
-        die("ERROR: Could not compile regex %s: %s", regstr, error_msg);
-    }
-}
-
 int
 main(int argc, char *argv[])
 {
+    RECDIR *recdir;
+    Args args = {0};
     unsigned char hash[SHA256_LENGTH];
     char hash_cstr[SHA256_CSTR_LENGTH];
     char data[1024];
-    int nbytes;
-    Args args = {0};
-    regex_t exclude_reg;
-    RECDIR *recdir;
+    size_t nbytes;
     char *fpath;
     FILE *fp;
 
-    parseargs(argc, argv, &args);
+    argsparse(argc, argv, &args);
 
-    if (args.exclude_reg)
-        compreg(args.exclude_reg, &exclude_reg);
-
-    //if (args.realpath && (args.path = realpath(args.path, NULL)) == NULL)
-        //die("ERROR: Could not resolve path %s:", args.path);
-    //errno = 0;
-
-    recdir = recdiropen(args.path, args.exclude_reg ? &exclude_reg : NULL, args.verbose);
+    recdir = recdiropen(args.path, args.exclude_reg, args.verbose);
 
     if (recdir == NULL)
-        die("ERROR: Could not open directory %s:", argv[1]);
+        die("%s:", args.path);
 
     while ((fpath = recdirread(recdir)) != NULL) {
         if ((fp = fopen(fpath, "r")) == NULL)
@@ -75,11 +50,10 @@ main(int argc, char *argv[])
     }
 
     if (errno != 0)
-        die("ERROR: Could not read directory:");
+        die("Could not read directory:");
 
     recdirclose(recdir);
-    if (args.exclude_reg) regfree(&exclude_reg);
-    if (args.realpath) free((char *)args.path);
+    argsfree(&args);
 
     return 0;
 }

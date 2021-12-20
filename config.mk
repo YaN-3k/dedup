@@ -6,7 +6,7 @@ src_dir := src
 bin := dedup
 
 CPPFLAGS := -D_DEFAULT_SOURCE -DVERSION=\"$(version)\" -MMD -MP
-CFLAGS   := -std=c99 -pedantic -Wall $(incs) $(CPPFLAGS)
+CFLAGS   := -std=c99 -pedantic -Wextra -Wall $(incs) $(CPPFLAGS)
 LDFLAGS  := -lcrypto -lssl
 
 cflags_debug   := -ggdb

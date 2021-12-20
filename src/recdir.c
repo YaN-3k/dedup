@@ -31,7 +31,7 @@ struct RECDIR_ {
     char *fpath;
     size_t size;
     size_t max_size;
-    RECDIR_FRAME frames[];
+    RECDIR_FRAME frames[126];
 };
 
 static RECDIR_FRAME *recdirtop(RECDIR *recdir);
@@ -64,10 +64,13 @@ recdirpush(RECDIR *recdir, const char *path)
     if (dir == NULL) {
         free(dpath);
     } else {
+        recdir->size++;
+        /*
         if (++recdir->size == recdir->max_size) {
             recdir->max_size += RECDIR_REALLOC_SIZE;
             recdir = RECDIR_REALLOC(recdir);
         }
+        */
         top = recdirtop(recdir);
         top->dir = dir;
         top->path = dpath;
@@ -85,10 +88,13 @@ recdirpop(RECDIR *recdir)
     top = recdirtop(recdir);
     free(top->path);
     excode = closedir(top->dir);
+    recdir->size--;
+    /*
     if (--recdir->size < recdir->max_size - RECDIR_REALLOC_SIZE) {
         recdir->max_size -= RECDIR_REALLOC_SIZE;
         recdir = RECDIR_REALLOC(recdir);
     }
+    */
     return excode;
 }
 
@@ -105,7 +111,7 @@ recdiropen(const char *path, regex_t *exclude_reg, int verbose)
     RECDIR *recdir;
     DIR *dir;
 
-    recdir = emalloc(sizeof(struct RECDIR_) + sizeof(RECDIR_FRAME) * RECDIR_REALLOC_SIZE);
+    recdir = emalloc(sizeof(struct RECDIR_));  // + sizeof(RECDIR_FRAME) * RECDIR_REALLOC_SIZE);
     memset(recdir, 0, sizeof(struct RECDIR_));
     recdir->max_size = RECDIR_REALLOC_SIZE;
     recdir->exclude_reg = exclude_reg;
