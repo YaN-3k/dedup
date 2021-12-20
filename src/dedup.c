@@ -1,7 +1,7 @@
 #include <assert.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <errno.h>
 #include <string.h>
 
 #include <unistd.h>
@@ -10,7 +10,10 @@
 
 #include "recdir.h"
 #include "sha256.h"
+#include "args.h"
 #include "util.h"
+
+static void compreg(const char *regstr, regex_t *reg);
 
 void
 compreg(const char *regstr, regex_t *reg)
@@ -32,24 +35,24 @@ main(int argc, char *argv[])
 {
     unsigned char hash[SHA256_LENGTH];
     char hash_cstr[SHA256_CSTR_LENGTH];
-    int verbose = 2;
+    char data[1024];
+    int nbytes;
+    Args args = {0};
+    regex_t exclude_reg;
     RECDIR *recdir;
-    regex_t exclude_reg = {0};
-    char *dpath, *fpath;
+    char *fpath;
     FILE *fp;
 
-    if (argc < 3 || argc > 4)
-        die("usage: %s [dir] [database] [exclude-pattern]", argv[0]);
+    parseargs(argc, argv, &args);
 
-    if (argc > 3)
-        compreg(argv[3], &exclude_reg);
+    if (args.exclude_reg)
+        compreg(args.exclude_reg, &exclude_reg);
 
-    if ((dpath = realpath(argv[1], NULL)) == NULL)
-        die("ERROR: Could not resolve path %s:", argv[1]);
-    errno = 0;
+    //if (args.realpath && (args.path = realpath(args.path, NULL)) == NULL)
+        //die("ERROR: Could not resolve path %s:", args.path);
+    //errno = 0;
 
-    recdir = recdiropen(dpath, argc > 3 ? &exclude_reg : NULL, verbose);
-    free(dpath);
+    recdir = recdiropen(args.path, args.exclude_reg ? &exclude_reg : NULL, args.verbose);
 
     if (recdir == NULL)
         die("ERROR: Could not open directory %s:", argv[1]);
@@ -58,25 +61,25 @@ main(int argc, char *argv[])
         if ((fp = fopen(fpath, "r")) == NULL)
             continue;
 
-        if (sha256(fp, hash) == 0) {
-            fclose(fp);
-            if (verbose > 1)
-                printf("%-50s -- [EMPTY]\n", fpath);
-            continue;
-        }
+        memset(data, 0, sizeof(data));
+        nbytes = fread(data, 1, sizeof(data), fp);
         fclose(fp);
 
-        memset(hash_cstr, 0, sizeof(hash_cstr));
-        hash2cstr(hash, hash_cstr);
-        if (verbose > 1)
-            printf("%-50s -- %s\n", fpath, hash_cstr);
+        sha256(hash, data, nbytes);
+
+        if (args.verbose & VERBOSE_HASH) {
+            memset(hash_cstr, 0, sizeof(hash_cstr));
+            hash2cstr(hash, hash_cstr);
+            printf("%-64s %s\n", hash_cstr, fpath);
+        }
     }
 
     if (errno != 0)
         die("ERROR: Could not read directory:");
 
     recdirclose(recdir);
-    regfree(&exclude_reg);
+    if (args.exclude_reg) regfree(&exclude_reg);
+    if (args.realpath) free((char *)args.path);
 
     return 0;
 }

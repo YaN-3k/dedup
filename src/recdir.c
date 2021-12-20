@@ -13,6 +13,7 @@
 #include <unistd.h>
 
 #include "util.h"
+#include "args.h"
 
 #define RECDIR_REALLOC_SIZE 16
 #define RECDIR_REALLOC(recdir) \
@@ -26,7 +27,7 @@ typedef struct {
 
 struct RECDIR_ {
     regex_t *exclude_reg;
-    int verbose;
+    const char *fmt;
     char *fpath;
     size_t size;
     size_t max_size;
@@ -108,7 +109,8 @@ recdiropen(const char *path, regex_t *exclude_reg, int verbose)
     memset(recdir, 0, sizeof(struct RECDIR_));
     recdir->max_size = RECDIR_REALLOC_SIZE;
     recdir->exclude_reg = exclude_reg;
-    recdir->verbose = verbose;
+    if (verbose & VERBOSE_STACK)
+        recdir->fmt = (verbose & VERBOSE_HASH) ? "%-64s %s\n" : "%-10s %s\n";
 
     if ((dir = opendir(path)) == NULL) {
         free(recdir);
@@ -120,17 +122,16 @@ recdiropen(const char *path, regex_t *exclude_reg, int verbose)
     top->dir = dir;
     top->path = strdup(path);
 
-    if (recdir->verbose)
-        printf("OPEN       %s\n", recdirtop(recdir)->path);
+    if (recdir->fmt)
+        printf(recdir->fmt, "OPEN", recdirtop(recdir)->path);
 
     return recdir;
 }
 
-int
+void
 recdirclose(RECDIR *recdir)
 {
     free(recdir);
-    return 0;
 }
 
 char *
@@ -155,8 +156,8 @@ recdirread(RECDIR *recdir)
 
         if (errno != 0 || ent == NULL) {
             errno = 0;
-            if (recdir->verbose)
-                printf("%-10s %s\n", "CLOSE", top->path);
+            if (recdir->fmt)
+                printf(recdir->fmt, "CLOSE", top->path);
             if (recdirpop(recdir))
                 return NULL;
             if (recdir->size == 0)
@@ -167,8 +168,8 @@ recdirread(RECDIR *recdir)
         if (faccessat(dirfd(top->dir), ent->d_name, R_OK, AT_EACCESS) != 0) {
             dpath = alloca(strlen(top->path) + strlen(ent->d_name) + 2);
             join_path(top->path, ent->d_name, dpath);
-            if (recdir->verbose)
-                printf("%-10s %s\n", "SKIP", dpath);
+            if (recdir->fmt)
+                printf(recdir->fmt, "SKIP", dpath);
             errno = 0;
             continue;
         }
@@ -179,19 +180,19 @@ recdirread(RECDIR *recdir)
                 dpath = alloca(strlen(top->path) + strlen(ent->d_name) + 2);
                 join_path(top->path, ent->d_name, dpath);
                 if (regexec(recdir->exclude_reg, dpath, 0, NULL, 0) == 0) {
-                    if (recdir->verbose)
-                        printf("%-10s %s\n", "SKIP", dpath);
+                    if (recdir->fmt)
+                        printf(recdir->fmt, "SKIP", dpath);
                     continue;
                 }   
             }
             if (recdirpush(recdir, ent->d_name) != 0) {
                 errno = 0;
-                if (recdir->verbose)
-                    printf("%-10s %s\n", "SKIP", top->path);
+                if (recdir->fmt)
+                    printf(recdir->fmt, "SKIP", top->path);
                 continue;
             }
-            if (recdir->verbose)
-                printf("%-10s %s\n", "OPEN", recdirtop(recdir)->path);
+            if (recdir->fmt)
+                printf(recdir->fmt, "OPEN", recdirtop(recdir)->path);
             break;
         case DT_REG:
             recdir->fpath = join_path(top->path, ent->d_name, NULL);
