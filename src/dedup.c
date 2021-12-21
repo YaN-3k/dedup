@@ -1,12 +1,6 @@
-#include <assert.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
-
-#include <unistd.h>
-#include <regex.h>
-#include <openssl/sha.h>
 
 #include "recdir.h"
 #include "sha256.h"
@@ -33,7 +27,7 @@ main(int argc, char *argv[])
     }
 
     while ((fpath = recdirread(recdir)) != NULL) {
-        if (sha256(hash, fpath, 64) < 0) {
+        if (sha256(hash, fpath, args.nbytes) < 0) {
             if (errno != 0) {
                 perror(fpath);
                 errno = 0;
@@ -43,16 +37,15 @@ main(int argc, char *argv[])
 
         if (args.verbose & VERBOSE_HASH) {
             hash2cstr(hash, hash_cstr);
-            printf("%-64s %s\n", hash_cstr, fpath);
+            printf("%-64s  %s\n", hash_cstr, fpath);
         }
     }
 
+    recdirclose(recdir);
+    argsfree(&args);
 
     if (errno != 0)
         die("Could not read directory:");
-
-    recdirclose(recdir);
-    argsfree(&args);
 
     return 0;
 }

@@ -1,85 +1,58 @@
 #include "args.h"
 
-#include <ctype.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <errno.h>
 
 #include <unistd.h>
 
 #include "util.h"
 
-#define ARGS_NUMBER(arg)                                      \
-    do {                                                      \
-        arg = atoi(optarg);                                   \
-        if (args->verbose + '0' != optarg[0])                 \
-            die("%s: invalid argument for option '%c': %s\n", \
-                *argv, optopt, optarg);                       \
+#define ARGS_NUMBER(arg)                                                    \
+    do {                                                                    \
+        arg = atoi(optarg);                                                 \
+        if (arg == 0 && optarg[0] != '0') {                                 \
+            fprintf(stderr, "%s: invalid argument for option '%c' -- %s\n", \
+                    *argv, opt, optarg);                                    \
+            usage(*argv);                                                   \
+        }                                                                   \
     } while (0)
-
-static void usage(const char *argv0);
-static int isnumber(const char *str);
-static void compreg(const char *regstr, regex_t *reg);
 
 void
 usage(const char *argv0)
 {
-    die("usage: %s [-v] directory [-e exclude]", argv0);
-}
-
-int
-isnumber(const char *str)
-{
-    for (; *str && isdigit(*str); str++);
-    return *str == '\0';
-}
-
-void
-compreg(const char *regstr, regex_t *reg)
-{
-    size_t errlen;
-    char *errmsg;
-    int errcode;
-
-    if ((errcode = regcomp(reg, regstr, 0)) != 0) {
-        errlen = regerror(errcode, reg, NULL, 0);
-        errmsg = alloca(errlen);
-        regerror(errcode, reg, errmsg, errlen);
-        die("%s: %s", regstr, errmsg);
-    }
+    die("usage: %s [-rhV] [-v level] [-c nbytes] [-m mindepth]"
+        " [-M maxdepth] [-e exclude] directory [database]", argv0);
+    exit(1);
 }
 
 void
 argsparse(int argc, char *argv[], Args *args)
 {
-    char *tmp;
+    char *tmp_path;
     char opt;
     int i;
 
+    const char *exclude_reg = NULL;
+    size_t errlen;
+    char *errmsg;
+    int errcode;
+
+    args->nbytes = -1;
     args->verbose = -1;
-    while ((opt = getopt(argc, argv, "v:e:rh")) >= 0) {
+
+    while ((opt = getopt(argc, argv, "rhVv:c:m:M:e:")) >= 0) {
         switch (opt) {
-            case 'v':
-                if (isnumber(optarg)) {
-                    args->verbose = atoi(optarg);
-                } else {
-                    argsfree(args);
-                    die("%s: invalid argument for option 'v': %s", *argv, optarg);
-                }
-                break;
-            case 'e':
-                args->exclude_reg = emalloc(sizeof(regex_t));
-                compreg(optarg, args->exclude_reg);
-                break;
-            case 'r':
-                args->realpath = 1;
-                break;
-            case 'h':
-                usage(*argv);
-                break;
-            case '?':
-            case ':':
-                exit(1);
+            case 'm': ARGS_NUMBER(args->maxdepth); break;
+            case 'M': ARGS_NUMBER(args->mindepth); break;
+            case 'v': ARGS_NUMBER(args->verbose);  break;
+            case 'c': ARGS_NUMBER(args->nbytes);   break;
+            case 'V': die("%s " VERSION, *argv);   break;
+            case 'e': exclude_reg = optarg;        break;
+            case 'r': args->realpath = 1;          break;
+            case 'h': usage(*argv);                break;
+            case '?': usage(*argv);                break;
+            case ':': usage(*argv);                break;
         }
     }
 
@@ -96,24 +69,36 @@ argsparse(int argc, char *argv[], Args *args)
         args->path = "./";
 
     if (args->realpath) {
-        if ((tmp = realpath(args->path, NULL)) == NULL) {
+        if ((tmp_path = realpath(args->path, NULL)) == NULL) {
             args->realpath = 0;
             argsfree(args);
             die("%s:", args->path);
         } else {
-            args->path = tmp;
+            args->path = tmp_path;
         }
     }
     errno = 0;
 
+    if (exclude_reg) {
+        args->exclude_reg = emalloc(sizeof(regex_t));
+        if ((errcode = regcomp(args->exclude_reg, exclude_reg, 0)) != 0) {
+            errlen = regerror(errcode, args->exclude_reg, NULL, 0);
+            errmsg = alloca(errlen);
+            regerror(errcode, args->exclude_reg, errmsg, errlen);
+            argsfree(args);
+            die("%s: %s", exclude_reg, errmsg);
+        }
+    }
 
     switch (args->verbose) {
-    case  3:  args->verbose = VERBOSE_STACK | VERBOSE_HASH; break;
-    case  2:  args->verbose = VERBOSE_STACK;  break;
-    case  1:  args->verbose = VERBOSE_HASH;   break;
-    case  0:  args->verbose = 0; break;
-    case -1: args->verbose = args->db == NULL ? VERBOSE_HASH : 0; break;
-    default: die("%s: invalid value for option 'v': %d", *argv, args->verbose);
+    case -1: args->verbose = (args->db == NULL) ? VERBOSE_HASH : 0; break;
+    case  3: args->verbose = VERBOSE_STACK | VERBOSE_HASH;          break;
+    case  2: args->verbose = VERBOSE_STACK;                         break;
+    case  1: args->verbose = VERBOSE_HASH;                          break;
+    case  0: args->verbose = 0;                                     break;
+    default:
+        argsfree(args);
+        die("%s: invalid value for option 'v': %d", *argv, args->verbose);
     }
 }
 

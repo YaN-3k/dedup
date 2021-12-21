@@ -5,14 +5,15 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define ALLOC(alloc_fn, ...) \
-    void *p; \
+#define ALLOC(alloc_fn, ...)          \
+    void *p;                          \
     if (!(p = alloc_fn(__VA_ARGS__))) \
-        die(#alloc_fn ":"); \
-    return p; \
+        die(#alloc_fn ":");           \
+    return p;                         \
 
 void
-die(const char *fmt, ...) {
+die(const char *fmt, ...)
+{
 	va_list ap;
 
 	va_start(ap, fmt);

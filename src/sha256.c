@@ -1,9 +1,6 @@
 #include "sha256.h"
 
 #include <stdio.h>
-#include <string.h>
-
-#include <openssl/sha.h>
 
 void
 hash2cstr(unsigned char hash[static SHA256_LENGTH],

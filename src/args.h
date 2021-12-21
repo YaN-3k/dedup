@@ -4,14 +4,17 @@
 #include <regex.h>
 
 enum {
-    VERBOSE_STACK  = 1 << 0,
-    VERBOSE_HASH   = 1 << 1,
+    VERBOSE_STACK = 1 << 0,
+    VERBOSE_HASH  = 1 << 1,
 };
 
 typedef struct {
     regex_t *exclude_reg;
     const char *path;
     const char *db;
+    int maxdepth;
+    int mindepth;
+    int nbytes;
     int realpath;
     int verbose;
 } Args;

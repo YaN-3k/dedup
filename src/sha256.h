@@ -1,7 +1,6 @@
 #ifndef SHA256_H__
 #define SHA256_H__
 
-#include <stdio.h>
 #include <openssl/sha.h>
 
 #define SHA256_LENGTH      SHA256_DIGEST_LENGTH
