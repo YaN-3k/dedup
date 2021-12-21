@@ -26,15 +26,20 @@ main(int argc, char *argv[])
 
     recdir = recdiropen(args.path, args.exclude_reg, args.verbose);
 
-    /* TODO: fix args memory leak */
     if (recdir == NULL) {
+        perror(args.path);
         argsfree(&args);
-        die(":");
+        exit(1);
     }
 
     while ((fpath = recdirread(recdir)) != NULL) {
-        if (sha256(hash, fpath, -1) < 0)
+        if (sha256(hash, fpath, 64) < 0) {
+            if (errno != 0) {
+                perror(fpath);
+                errno = 0;
+            }
             continue;
+        }
 
         if (args.verbose & VERBOSE_HASH) {
             hash2cstr(hash, hash_cstr);
@@ -48,8 +53,6 @@ main(int argc, char *argv[])
 
     recdirclose(recdir);
     argsfree(&args);
-
-    //printf("[ opened: %ld | excluded: 20 | skipped: 10 | readed: 20 ]\n", fcount);
 
     return 0;
 }

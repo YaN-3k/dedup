@@ -19,14 +19,7 @@
 #define FRAMES_REALLOC(frames) \
         erealloc(frames, sizeof(RECDIR_FRAME) * recdir->max_size);
 
-#define RECDIR_LOG(t, f) if (recdir->fmt) printf(recdir->fmt, t, f);
-
-/* TODO: summary for recdir */
-typedef struct {
-    int excluded;
-    int skipped;
-    int opened;
-} RECDIR_COUNT;
+#define RECDIR_LOG(...) if (recdir->fmt) printf(recdir->fmt, __VA_ARGS__)
 
 typedef struct {
     char *path;
@@ -110,8 +103,10 @@ recdiropen(const char *path, regex_t *exclude_reg, int verbose)
 
     recdir = ecalloc(1, sizeof(struct RECDIR_));
 
-    if (recdirpush(recdir, path) != 0)
+    if (recdirpush(recdir, path) != 0) {
+        free(recdir);
         return NULL;
+    }
 
     if (verbose & VERBOSE_STACK)
         recdir->fmt = (verbose & VERBOSE_HASH) ? "%-64s  %s\n" : "%-10s  %s\n";
@@ -148,10 +143,13 @@ recdirread(RECDIR *recdir)
                (strcmp(ent->d_name, ".") == 0 ||
                 strcmp(ent->d_name, "..") == 0));
 
-
         if (errno != 0 || ent == NULL) {
-            errno = 0;
-            RECDIR_LOG("CLOSE", top->path);
+            if (errno != 0) {
+                perror(path);
+                errno = 0;
+            } else {
+                RECDIR_LOG("CLOSE", top->path);
+            }
             if (recdirpop(recdir) || recdir->size == 0)
                 return NULL;
             continue;
@@ -161,7 +159,7 @@ recdirread(RECDIR *recdir)
         join_path(top->path, ent->d_name, path);
 
         if (access(path, R_OK) != 0) {
-            RECDIR_LOG("SKIP [P]", path);
+            perror(path);
             errno = 0;
             continue;
         }
@@ -174,8 +172,8 @@ recdirread(RECDIR *recdir)
                 continue;
             }
             if (recdirpush(recdir, path) != 0) {
+                perror(path);
                 errno = 0;
-                RECDIR_LOG("SKIP [E]", path);
                 assert(0 && "UNREACHABLE?");
                 continue;
             }

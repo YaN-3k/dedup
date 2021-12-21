@@ -9,6 +9,14 @@
 
 #include "util.h"
 
+#define ARGS_NUMBER(arg)                                      \
+    do {                                                      \
+        arg = atoi(optarg);                                   \
+        if (args->verbose + '0' != optarg[0])                 \
+            die("%s: invalid argument for option '%c': %s\n", \
+                *argv, optopt, optarg);                       \
+    } while (0)
+
 static void usage(const char *argv0);
 static int isnumber(const char *str);
 static void compreg(const char *regstr, regex_t *reg);
@@ -55,8 +63,8 @@ argsparse(int argc, char *argv[], Args *args)
                 if (isnumber(optarg)) {
                     args->verbose = atoi(optarg);
                 } else {
-                    printf("%s: invalid argument for option 'v': %s\n", *argv, optarg);
-                    exit(1);
+                    argsfree(args);
+                    die("%s: invalid argument for option 'v': %s", *argv, optarg);
                 }
                 break;
             case 'e':
@@ -88,10 +96,13 @@ argsparse(int argc, char *argv[], Args *args)
         args->path = "./";
 
     if (args->realpath) {
-        if ((tmp = realpath(args->path, NULL)) == NULL)
+        if ((tmp = realpath(args->path, NULL)) == NULL) {
+            args->realpath = 0;
+            argsfree(args);
             die("%s:", args->path);
-        else
+        } else {
             args->path = tmp;
+        }
     }
     errno = 0;
 
