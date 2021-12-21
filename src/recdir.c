@@ -63,23 +63,21 @@ int
 recdirpush(RECDIR *recdir, const char *path)
 {
     RECDIR_FRAME *top;
-    char *dpath;
     DIR *dir;
 
-    dpath = join_path(recdirtop(recdir)->path, path, NULL);
-    dir = opendir(dpath);
-    if (dir == NULL) {
-        free(dpath);
-    } else {
-        if (++recdir->size == recdir->max_size) {
-            recdir->max_size += FRAMES_REALLOC_SIZE;
-            recdir->frames = FRAMES_REALLOC(recdir->frames);
-        }
-        top = recdirtop(recdir);
-        top->dir = dir;
-        top->path = dpath;
+    dir = opendir(path);
+    if (dir == NULL)
+        return 1;
+
+    if (++recdir->size >= recdir->max_size) {
+        recdir->max_size += FRAMES_REALLOC_SIZE;
+        recdir->frames = FRAMES_REALLOC(recdir->frames);
     }
-    return dir == NULL;
+
+    top = recdirtop(recdir);
+    top->dir = dir;
+    top->path = strdup(path);
+    return 0;
 }
 
 int
@@ -108,31 +106,18 @@ recdirtop(RECDIR *recdir)
 RECDIR *
 recdiropen(const char *path, regex_t *exclude_reg, int verbose)
 {
-    RECDIR_FRAME *top;
     RECDIR *recdir;
-    DIR *dir;
 
-    recdir = emalloc(sizeof(struct RECDIR_));
-    memset(recdir, 0, sizeof(struct RECDIR_));
+    recdir = ecalloc(1, sizeof(struct RECDIR_));
 
-    recdir->max_size = FRAMES_REALLOC_SIZE;
-    recdir->frames = FRAMES_REALLOC(recdir->frames);
-    recdir->exclude_reg = exclude_reg;
+    if (recdirpush(recdir, path) != 0)
+        return NULL;
 
     if (verbose & VERBOSE_STACK)
-        recdir->fmt = (verbose & VERBOSE_HASH) ? "%-64s %s\n" : "%-10s %s\n";
+        recdir->fmt = (verbose & VERBOSE_HASH) ? "%-64s  %s\n" : "%-10s  %s\n";
 
-    if ((dir = opendir(path)) == NULL) {
-        free(recdir);
-        return NULL;
-    }
-
-    recdir->size++;
-    top = recdirtop(recdir);
-    top->dir = dir;
-    top->path = strdup(path);
-
-    RECDIR_LOG("OPEN", top->path);
+    recdir->exclude_reg = exclude_reg;
+    RECDIR_LOG("OPEN", path);
 
     return recdir;
 }
@@ -188,7 +173,7 @@ recdirread(RECDIR *recdir)
                 RECDIR_LOG("EXCLUDE", path);
                 continue;
             }
-            if (recdirpush(recdir, ent->d_name) != 0) {
+            if (recdirpush(recdir, path) != 0) {
                 errno = 0;
                 RECDIR_LOG("SKIP [E]", path);
                 assert(0 && "UNREACHABLE?");

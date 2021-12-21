@@ -60,7 +60,7 @@ argsparse(int argc, char *argv[], Args *args)
                 }
                 break;
             case 'e':
-                args->exclude_reg = malloc(sizeof(regex_t));
+                args->exclude_reg = emalloc(sizeof(regex_t));
                 compreg(optarg, args->exclude_reg);
                 break;
             case 'r':
