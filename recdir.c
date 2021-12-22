@@ -7,8 +7,8 @@
 #include <string.h>
 
 #include <dirent.h>
-#include <fcntl.h>
 #include <regex.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
 
@@ -131,6 +131,7 @@ recdirread(RECDIR *recdir)
 {
     struct dirent *ent;
     RECDIR_FRAME *top;
+    struct stat st;
 
     while (1) {
         top = recdirtop(recdir);
@@ -157,10 +158,13 @@ recdirread(RECDIR *recdir)
         free(recdir->path);
         recdir->path = makepath(top->path, ent->d_name);
 
-        if (access(recdir->path, R_OK) != 0) {
-            perror(recdir->path);
-            errno = 0;
-            continue;
+        if (ent->d_type == DT_LNK || ent->d_type == DT_UNKNOWN) {
+            if (stat(recdir->path, &st) < 0) {
+                perror(recdir->path);
+                errno = 0;
+                continue;
+            }
+            ent->d_type = st.st_mode >> 12;
         }
 
         switch (ent->d_type) {
@@ -184,8 +188,7 @@ recdirread(RECDIR *recdir)
                 continue;
             return recdir->path;
         default:
-            /* TODO: handle for symlinks */
-            RECDIR_LOG("SKIP [T]", recdir->path);
+            RECDIR_LOG("SKIP", recdir->path);
         }
     }
 }
