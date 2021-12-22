@@ -8,15 +8,13 @@
 
 #include "util.h"
 
-#define ARGS_NUMBER(arg)                                                    \
-    do {                                                                    \
-        arg = atoi(optarg);                                                 \
-        if (arg == 0 && optarg[0] != '0') {                                 \
-            fprintf(stderr, "%s: invalid argument for option '%c' -- %s\n", \
-                    *argv, opt, optarg);                                    \
-            usage(*argv);                                                   \
-        }                                                                   \
-    } while (0)
+#define ARGS_NUMBER(arg)                                           \
+        do {                                                       \
+            arg = atoi(optarg);                                    \
+            if (arg == 0 && optarg[0] != '0')                      \
+                die("%s: invalid argument for option '%c' -- %s",  \
+                    *argv, opt, optarg);                           \
+        } while (0)
 
 void
 usage(const char *argv0)
@@ -29,30 +27,31 @@ usage(const char *argv0)
 void
 argsparse(int argc, char *argv[], Args *args)
 {
-    char *tmp_path;
-    char opt;
-    int i;
-
     const char *exclude_reg = NULL;
     size_t errlen;
     char *errmsg;
     int errcode;
+    char *tmp_path;
+    char opt;
+    int i;
 
-    args->nbytes = -1;
-    args->verbose = -1;
+    args->mindepth =  0;
+    args->maxdepth = -1;
+    args->nbytes   = -1;
+    args->verbose  = -1;
 
     while ((opt = getopt(argc, argv, "rhVv:c:m:M:e:")) >= 0) {
         switch (opt) {
-            case 'm': ARGS_NUMBER(args->maxdepth); break;
-            case 'M': ARGS_NUMBER(args->mindepth); break;
-            case 'v': ARGS_NUMBER(args->verbose);  break;
-            case 'c': ARGS_NUMBER(args->nbytes);   break;
-            case 'V': die("%s " VERSION, *argv);   break;
-            case 'e': exclude_reg = optarg;        break;
-            case 'r': args->realpath = 1;          break;
-            case 'h': usage(*argv);                break;
-            case '?': usage(*argv);                break;
-            case ':': usage(*argv);                break;
+        case 'm': ARGS_NUMBER(args->mindepth); break;
+        case 'M': ARGS_NUMBER(args->maxdepth); break;
+        case 'v': ARGS_NUMBER(args->verbose);  break;
+        case 'c': ARGS_NUMBER(args->nbytes);   break;
+        case 'V': die("%s " VERSION, *argv);   break;
+        case 'e': exclude_reg = optarg;        break;
+        case 'r': args->realpath = 1;          break;
+        case 'h': usage(*argv);                break;
+        case '?': usage(*argv);                break;
+        case ':': usage(*argv);                break;
         }
     }
 
@@ -92,13 +91,10 @@ argsparse(int argc, char *argv[], Args *args)
 
     switch (args->verbose) {
     case -1: args->verbose = (args->db == NULL) ? VERBOSE_HASH : 0; break;
-    case  3: args->verbose = VERBOSE_STACK | VERBOSE_HASH;          break;
-    case  2: args->verbose = VERBOSE_STACK;                         break;
+    case  0: args->verbose = VERBOSE_SILENT;                        break;
     case  1: args->verbose = VERBOSE_HASH;                          break;
-    case  0: args->verbose = 0;                                     break;
-    default:
-        argsfree(args);
-        die("%s: invalid value for option 'v': %d", *argv, args->verbose);
+    case  2: args->verbose = VERBOSE_STACK;                         break;
+    default: args->verbose = VERBOSE_STACK | VERBOSE_HASH;          break;
     }
 }
 

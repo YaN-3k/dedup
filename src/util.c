@@ -5,11 +5,11 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define ALLOC(alloc_fn, ...)          \
-    void *p;                          \
-    if (!(p = alloc_fn(__VA_ARGS__))) \
-        die(#alloc_fn ":");           \
-    return p;                         \
+#define ALLOC(alloc_fn, ...)           \
+    void *p;                           \
+    if (!(p = alloc_fn(__VA_ARGS__)))  \
+        die(#alloc_fn ":");            \
+    return p;                          \
 
 void
 die(const char *fmt, ...)
@@ -31,5 +31,5 @@ die(const char *fmt, ...)
 }
 
 void *emalloc(size_t size) { ALLOC(malloc, size); }
-void *erealloc(void *ptr, size_t new_size) { ALLOC(realloc, ptr, new_size); }
+void *erealloc(void *ptr, size_t size) { ALLOC(realloc, ptr, size); }
 void *ecalloc(size_t nmemb, size_t size) { ALLOC(calloc, nmemb, size); }

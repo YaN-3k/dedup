@@ -10,15 +10,18 @@
 int
 main(int argc, char *argv[])
 {
-    RECDIR *recdir;
-    Args args = {0};
     unsigned char hash[SHA256_LENGTH];
     char hash_cstr[SHA256_CSTR_LENGTH];
+    RECDIR *recdir;
+    Args args = {0};
     char *fpath;
 
     argsparse(argc, argv, &args);
 
-    recdir = recdiropen(args.path, args.exclude_reg, args.verbose);
+    recdir = recdiropen(
+        args.path, args.exclude_reg,
+        args.maxdepth, args.mindepth, args.verbose
+    );
 
     if (recdir == NULL) {
         perror(args.path);

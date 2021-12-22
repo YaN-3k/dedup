@@ -4,19 +4,20 @@
 #include <regex.h>
 
 enum {
-    VERBOSE_STACK = 1 << 0,
-    VERBOSE_HASH  = 1 << 1,
+    VERBOSE_SILENT = 0,
+    VERBOSE_STACK  = 1 << 0,
+    VERBOSE_HASH   = 1 << 1,
 };
 
 typedef struct {
     regex_t *exclude_reg;
     const char *path;
     const char *db;
-    int maxdepth;
-    int mindepth;
-    int nbytes;
-    int realpath;
+    size_t maxdepth;
+    size_t mindepth;
+    size_t nbytes;
     int verbose;
+    int realpath;
 } Args;
 
 void argsparse(int argc, char *argv[], Args *args);
