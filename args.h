@@ -6,7 +6,7 @@
 enum {
     VERBOSE_SILENT = 0,
     VERBOSE_STACK  = 1 << 0,
-    VERBOSE_HASH   = 1 << 1,
+    VERBOSE_HASH   = 1 << 1
 };
 
 typedef struct {

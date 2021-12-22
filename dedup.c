@@ -2,9 +2,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "args.h"
 #include "recdir.h"
 #include "sha256.h"
-#include "args.h"
 #include "util.h"
 
 int

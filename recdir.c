@@ -16,7 +16,7 @@
 #include "args.h"
 
 #define FRAMES_REALLOC_SIZE 16
-#define RECDIR_LOG(...) if (recdir->fmt) printf(recdir->fmt, __VA_ARGS__) \
+#define RECDIR_LOG(op, path) if (recdir->fmt) printf(recdir->fmt, op, path)
 
 typedef struct {
     char *path;
@@ -31,22 +31,20 @@ struct RECDIR_ {
     size_t maxdepth;
     size_t mindepth;
     size_t depth;
-    char *fpath;
+    char *path;
 };
 
 static RECDIR_FRAME *recdirtop(RECDIR *recdir);
 static int recdirpush(RECDIR *recdir, const char *path);
 static int recdirpop(RECDIR *recdir);
-static char *makepath(const char *p1, const char *p2, char *outpath);
+static char *makepath(const char *p1, const char *p2);
 
 char *
-makepath(const char *p1, const char *p2, char *outpath)
+makepath(const char *p1, const char *p2)
 {
     int p1sz = strlen(p1);
-    const char *fmt;
-
-    if (outpath == NULL) outpath = emalloc(p1sz + strlen(p2) + 2);
-    fmt = p1[p1sz - 1] != '/' ? "%s/%s" : "%s%s";
+    const char *fmt = p1[p1sz - 1] != '/' ? "%s/%s" : "%s%s";
+    char *outpath = emalloc(p1sz + strlen(p2) + 2);
     sprintf(outpath, fmt, p1, p2);
     return outpath;
 }
@@ -102,9 +100,7 @@ RECDIR *
 recdiropen(const char *path, regex_t *exclude_reg, size_t maxdepth,
            size_t mindepth, int verbose)
 {
-    RECDIR *recdir;
-
-    recdir = ecalloc(1, sizeof(struct RECDIR_));
+    RECDIR *recdir = ecalloc(1, sizeof(struct RECDIR_));
 
     if (recdirpush(recdir, path) != 0) {
         free(recdir);
@@ -125,6 +121,7 @@ recdiropen(const char *path, regex_t *exclude_reg, size_t maxdepth,
 void
 recdirclose(RECDIR *recdir)
 {
+    free(recdir->path);
     free(recdir->frames);
     free(recdir);
 }
@@ -134,12 +131,6 @@ recdirread(RECDIR *recdir)
 {
     struct dirent *ent;
     RECDIR_FRAME *top;
-    char *path;
-
-    if (recdir->fpath != NULL) {
-        free(recdir->fpath);
-        recdir->fpath = NULL;
-    }
 
     while (1) {
         top = recdirtop(recdir);
@@ -149,7 +140,7 @@ recdirread(RECDIR *recdir)
                 strcmp(ent->d_name, "..") == 0));
 
         if (errno != 0) {
-            perror(path);
+            perror(top->path);
             errno = 0;
             if (recdirpop(recdir) < 0 || recdir->depth == 0)
                 return NULL;
@@ -163,11 +154,11 @@ recdirread(RECDIR *recdir)
             continue;
         }
 
-        path = alloca(strlen(top->path) + strlen(ent->d_name) + 2);
-        makepath(top->path, ent->d_name, path);
+        free(recdir->path);
+        recdir->path = makepath(top->path, ent->d_name);
 
-        if (access(path, R_OK) != 0) {
-            perror(path);
+        if (access(recdir->path, R_OK) != 0) {
+            perror(recdir->path);
             errno = 0;
             continue;
         }
@@ -177,14 +168,13 @@ recdirread(RECDIR *recdir)
             if (recdir->maxdepth <= recdir->depth)
                 continue;
             if (recdir->exclude_reg != NULL &&
-                regexec(recdir->exclude_reg, path, 0, NULL, 0) == 0) {
-                RECDIR_LOG("EXCLUDE", path);
+                regexec(recdir->exclude_reg, recdir->path, 0, NULL, 0) == 0) {
+                RECDIR_LOG("EXCLUDE", recdir->path);
                 continue;
             }
-            if (recdirpush(recdir, path) != 0) {
-                perror(path);
+            if (recdirpush(recdir, recdir->path) != 0) {
+                perror(recdir->path);
                 errno = 0;
-                assert(0 && "UNREACHABLE?");
                 continue;
             }
             RECDIR_LOG("OPEN", recdirtop(recdir)->path);
@@ -192,11 +182,10 @@ recdirread(RECDIR *recdir)
         case DT_REG:
             if (recdir->mindepth > recdir->depth)
                 continue;
-            recdir->fpath = makepath(top->path, ent->d_name, NULL);
-            return recdir->fpath;
+            return recdir->path;
         default:
             /* TODO: handle for symlinks */
-            RECDIR_LOG("SKIP [T]", path);
+            RECDIR_LOG("SKIP [T]", recdir->path);
         }
     }
 }

@@ -1,30 +1,27 @@
-include config.mk
+VERSION = 1.0
 
-src := $(shell find $(src_dir) -name '*.c')
-obj := $(src:$(src_dir)/%.c=$(bin_dir)/%.o)
-dep := $(obj:.o=.d)
+CPPFLAGS = -D_DEFAULT_SOURCE -DVERSION=\"${VERSION}\"
+CFLAGS   = -ansi -pedantic -Wextra -Wall ${CPPFLAGS} -g
+LDFLAGS  = -lcrypto -lssl
 
-all: options $(bin)
+SRC = dedup.c args.c recdir.c sha256.c util.c
+OBJ = ${SRC:.c=.o}
+
+all: options dedup
 
 options:
-	@echo "# CFLAGS   = ${CFLAGS}"
-	@echo "# LDFLAGS  = ${LDFLAGS}"
-	@echo "# CC       = ${CC}"
+	@echo dedup build options:
+	@echo "CFLAGS   = ${CFLAGS}"
+	@echo "LDFLAGS  = ${LDFLAGS}"
+	@echo "CC       = ${CC}"
 
-$(bin_dir)/%.o: $(src_dir)/%.c
-	@echo $(cmd_cc)
-	$(Q)mkdir -p $(dir $@)
-	@$(CC) -c -o $@ $(CFLAGS) $<
+.c.o:
+	${CC} -c ${CFLAGS} $<
 
-$(obj): config.mk
-
-$(bin): $(obj)
-	@echo $(cmd_ld)
-	@$(CC) -o $@ $(obj) $(LDFLAGS)
+dedup: ${OBJ}
+	${CC} -o $@ ${OBJ} ${LDFLAGS}
 
 clean:
-	rm -f $(obj) ${dep} $(bin)
-
--include $(dep)
+	rm -f dedup ${OBJ}
 
 .PHONY: all options clean

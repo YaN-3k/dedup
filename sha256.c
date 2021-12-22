@@ -3,17 +3,18 @@
 #include <stdio.h>
 
 void
-hash2cstr(unsigned char hash[static SHA256_LENGTH],
-          char cstr[static SHA256_CSTR_LENGTH])
+hash2cstr(unsigned char hash[], char cstr[])
 {
-    for (int i = 0; i < SHA256_LENGTH; i++)
+    int i;
+
+    for (i = 0; i < SHA256_LENGTH; i++)
         sprintf(cstr + (i * 2), "%02x", hash[i]);
 }
 
 int
-sha256(unsigned char hash[static SHA256_LENGTH], const char *filepath,
-       size_t nbytes)
+sha256(unsigned char hash[], const char *filepath, size_t nbytes)
 {
+    SHA256_CTX sha_ctx;
     size_t n, total = 0;
     char buf[BUFSIZ];
     FILE *fp;
@@ -21,7 +22,6 @@ sha256(unsigned char hash[static SHA256_LENGTH], const char *filepath,
     if ((fp = fopen(filepath, "r")) == NULL)
         return -1;
 
-    SHA256_CTX sha_ctx;
     SHA256_Init(&sha_ctx);
 
     while ((n = fread(buf, 1, BUFSIZ, fp)) > 0 && total < nbytes) {
