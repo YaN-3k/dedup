@@ -23,7 +23,7 @@ typedef struct {
     DIR *dir;
 } RECDIR_FRAME;
 
-struct RECDIR_ {
+struct RECDIR {
     RECDIR_FRAME *frames;
     regex_t *exclude_reg;
     const char *fmt;
@@ -100,7 +100,7 @@ RECDIR *
 recdiropen(const char *path, regex_t *exclude_reg, size_t maxdepth,
            size_t mindepth, int verbose)
 {
-    RECDIR *recdir = ecalloc(1, sizeof(struct RECDIR_));
+    RECDIR *recdir = ecalloc(1, sizeof(struct RECDIR));
 
     if (recdirpush(recdir, path) != 0) {
         free(recdir);
@@ -121,6 +121,11 @@ recdiropen(const char *path, regex_t *exclude_reg, size_t maxdepth,
 void
 recdirclose(RECDIR *recdir)
 {
+    while (recdir->depth) {
+        RECDIR_LOG("CLOSE", recdirtop(recdir)->path);
+        recdirpop(recdir);
+    }
+
     free(recdir->path);
     free(recdir->frames);
     free(recdir);
@@ -133,6 +138,7 @@ recdirread(RECDIR *recdir)
     RECDIR_FRAME *top;
     struct stat st;
 
+    errno = 0;
     while (1) {
         top = recdirtop(recdir);
 

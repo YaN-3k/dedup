@@ -12,15 +12,11 @@ hash2cstr(unsigned char hash[], char cstr[])
 }
 
 int
-sha256(unsigned char hash[], const char *filepath, size_t nbytes)
+sha256(unsigned char hash[], FILE *fp, size_t nbytes)
 {
     SHA256_CTX sha_ctx;
     size_t n, total = 0;
     char buf[BUFSIZ];
-    FILE *fp;
-
-    if ((fp = fopen(filepath, "r")) == NULL)
-        return -1;
 
     SHA256_Init(&sha_ctx);
 
@@ -33,7 +29,6 @@ sha256(unsigned char hash[], const char *filepath, size_t nbytes)
     }
 
     SHA256_Final(hash, &sha_ctx);
-    fclose(fp);
 
     return total;
 }

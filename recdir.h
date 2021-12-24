@@ -3,7 +3,7 @@
 
 #include <regex.h>
 
-typedef struct RECDIR_ RECDIR;
+typedef struct RECDIR RECDIR;
 
 RECDIR *recdiropen(const char *path, regex_t *exclude_reg, size_t maxdepth,
                    size_t mindepth, int verbose);
