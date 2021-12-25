@@ -55,7 +55,7 @@ sql_insert(SQL *sql, const char *filename, char unsigned hash[])
         sql->insertc = 0;
     }
 
-    return sqlite3_errcode(sql->database);
+    return 0;
 }
 
 const char *
