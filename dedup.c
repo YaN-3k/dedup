@@ -4,12 +4,15 @@
 #include <string.h>
 
 #include <signal.h>
+#include <pthread.h>
 
 #include "args.h"
 #include "recdir.h"
 #include "sha256.h"
 #include "util.h"
 #include "sql.h"
+
+#define THREADS_CAP 1024
 
 typedef struct {
     SQL *sql;
@@ -63,6 +66,8 @@ process_file(void *datap)
         return NULL;
     }
 
+    free(data->fpath);
+    free(data);
     return NULL;
 }
 
@@ -70,8 +75,11 @@ int
 main(int argc, char *argv[])
 {
     ExecutionData data = {0};
+    ExecutionData *data_copy;
     RECDIR *recdir = NULL;
     char *fpath;
+    pthread_t threads[THREADS_CAP];
+    size_t i, threads_sz = 0;
 
     signal(SIGINT, terminate);
 
@@ -97,9 +105,21 @@ main(int argc, char *argv[])
     }
 
     while ((fpath = recdirread(recdir)) != NULL && !terminated) {
-        data.fpath = fpath;
-        process_file(&data);
+        data_copy = emalloc(sizeof(ExecutionData));
+        *data_copy = data;
+        data_copy->fpath = fpath;
+        pthread_create(threads + threads_sz, NULL, process_file, data_copy);
+        threads_sz++;
+        if (threads_sz >= THREADS_CAP) {
+            for (i = 0; i < threads_sz; i++)
+                pthread_join(threads[i], NULL);
+            threads_sz = 0;
+        }
     }
+
+    for (i = 0; i < threads_sz; i++)
+        pthread_join(threads[i], NULL);
+
 
 cleanup:
     if (data.sql) sql_close(data.sql);

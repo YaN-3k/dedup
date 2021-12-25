@@ -161,7 +161,6 @@ recdirread(RECDIR *recdir)
             continue;
         }
 
-        free(recdir->path);
         recdir->path = makepath(top->path, ent->d_name);
 
         if (ent->d_type == DT_LNK || ent->d_type == DT_UNKNOWN) {
