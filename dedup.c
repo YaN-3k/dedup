@@ -3,131 +3,114 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <signal.h>
-#include <pthread.h>
-
 #include "args.h"
 #include "recdir.h"
 #include "sha256.h"
-#include "util.h"
 #include "sql.h"
+#include "task.h"
+#include "util.h"
 
-#define THREADS_CAP 1024
-
-typedef struct {
-    SQL *sql;
-    Args args;
-    int excode;
-    char *fpath;
-} ExecutionData;
-
-static int terminated;
-
-static void terminate();
-static void *process_file(void *datap);
-
-void
-terminate()
-{
-    fputs("\nterminating...\n", stderr);
-    terminated = 1;
-}
+SQL *sql;
+Args args;
 
 void *
-process_file(void *datap)
+process_file(void *data)
 {
-    ExecutionData *data = datap;
     unsigned char hash[SHA256_LENGTH];
     char hash_cstr[SHA256_CSTR_LENGTH];
+    struct task_head *tasks = data;
+    struct task_entry *entry;
     FILE *fp;
 
-    if ((fp = fopen(data->fpath, "r")) == NULL) {
-        if (errno != 0) {
-            perror(data->fpath);
-            errno = 0;
+    while (1) {
+        entry = task_get(tasks);
+
+        if (entry->fpath == NULL)
+            break;
+
+        if ((fp = fopen(entry->fpath, "r")) == NULL) {
+            if (errno != 0) {
+                perror(entry->fpath);
+                errno = 0;
+            }
+            task_free(entry);
+            continue;
         }
-        return NULL;
+
+        sha256(hash, fp, args.nbytes);
+        fclose(fp);
+
+        if (args.verbose & VERBOSE_HASH) {
+            hash2cstr(hash, hash_cstr);
+            printf("%-64s  %s\n", hash_cstr, entry->fpath);
+        }
+
+        if (sql != NULL && sql_insert(sql, entry->fpath, hash) != 0) {
+            fprintf(stderr, "sqlite3: %s\n", sql_errmsg(sql));
+            /*fprintf(stderr, "terminating...\n");*/
+            errno = 0;
+            break;
+        }
+        task_free(entry);
     }
 
-    sha256(hash, fp, data->args.nbytes);
-    fclose(fp);
-
-    if (data->args.verbose & VERBOSE_HASH) {
-        hash2cstr(hash, hash_cstr);
-        printf("%-64s  %s\n", hash_cstr, data->fpath);
-    }
-
-    if (data->sql != NULL && sql_insert(data->sql, data->fpath, hash) != 0) {
-        fprintf(stderr, "sqlite3: %s\n", sql_errmsg(data->sql));
-        fprintf(stderr, "terminating...\n");
-        errno = 0;
-        data->excode = 1;
-        terminated = 1;
-        return NULL;
-    }
-
-    free(data->fpath);
-    free(data);
-    return NULL;
+    task_free(entry);
+    pthread_exit(0);
 }
 
 int
 main(int argc, char *argv[])
 {
-    ExecutionData data = {0};
-    ExecutionData *data_copy;
+    pthread_t threads[THREADS];
+    struct task_head tasks;
     RECDIR *recdir = NULL;
+    int excode = 0;
     char *fpath;
-    pthread_t threads[THREADS_CAP];
-    size_t i, threads_sz = 0;
+    size_t i;
 
-    signal(SIGINT, terminate);
+    task_head_init(&tasks);
 
-    argsparse(argc, argv, &data.args);
+    argsparse(argc, argv, &args);
 
-    if (data.args.db && sql_open(&data.sql, data.args.db) != 0) {
-        fprintf(stderr, "sqlite3: %s\n", sql_errmsg(data.sql));
+    if (args.db && sql_open(&sql, args.db) != 0) {
+        fprintf(stderr, "sqlite3: %s\n", sql_errmsg(sql));
         errno = 0;
-        data.excode = 1;
+        excode = 1;
         goto cleanup;
     }
 
     recdir = recdiropen(
-        data.args.path, data.args.exclude_reg,
-        data.args.maxdepth, data.args.mindepth, data.args.verbose
+        args.path, args.exclude_reg,
+        args.maxdepth, args.mindepth, args.verbose
     );
 
     if (recdir == NULL) {
-        perror(data.args.path);
+        perror(args.path);
         errno = 0;
-        data.excode = 1;
+        excode = 1;
         goto cleanup;
     }
 
-    while ((fpath = recdirread(recdir)) != NULL && !terminated) {
-        data_copy = emalloc(sizeof(ExecutionData));
-        *data_copy = data;
-        data_copy->fpath = fpath;
-        pthread_create(threads + threads_sz, NULL, process_file, data_copy);
-        threads_sz++;
-        if (threads_sz >= THREADS_CAP) {
-            for (i = 0; i < threads_sz; i++)
-                pthread_join(threads[i], NULL);
-            threads_sz = 0;
-        }
-    }
+    for (i = 0; i < THREADS; i++)
+        pthread_create(threads + i, NULL, process_file, &tasks);
 
-    for (i = 0; i < threads_sz; i++)
+    while ((fpath = recdirread(recdir)) != NULL)
+        task_add(fpath, &tasks);
+
+    for (i = 0; i < THREADS; i++)
+        task_add(NULL, &tasks);
+    
+    for (i = 0; i < THREADS; i++)
         pthread_join(threads[i], NULL);
 
-
 cleanup:
-    if (data.sql) sql_close(data.sql);
+    if (sql) sql_close(sql);
     if (recdir) recdirclose(recdir);
-    argsfree(&data.args);
+    argsfree(&args);
+    task_head_free(&tasks);
 
     if (errno != 0)
         die("Could not read directory:");
 
-    return data.excode;
+    return excode;
 }

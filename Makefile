@@ -1,10 +1,11 @@
 VERSION = 1.0
+THREADS = 1
 
-CPPFLAGS = -D_DEFAULT_SOURCE -DVERSION=\"${VERSION}\"
-CFLAGS   = -ansi -pedantic -Wextra -Wall ${CPPFLAGS} -g
+CPPFLAGS = -D_DEFAULT_SOURCE -DVERSION=\"${VERSION}\" -DTHREADS=${THREADS}
+CFLAGS   = -pedantic -Wextra -Wall ${CPPFLAGS} -g
 LDFLAGS  = -lcrypto -lssl -lsqlite3 -lpthread
 
-SRC = dedup.c args.c recdir.c sha256.c util.c sql.c
+SRC = dedup.c args.c recdir.c sha256.c util.c sql.c task.c queue.c
 OBJ = ${SRC:.c=.o}
 
 all: options dedup

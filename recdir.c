@@ -19,7 +19,7 @@
 #define RECDIR_LOG(op, path) if (recdir->fmt) printf(recdir->fmt, op, path)
 
 typedef struct {
-    char *path;
+    const char *path;
     DIR *dir;
 } RECDIR_FRAME;
 
@@ -32,6 +32,7 @@ struct RECDIR {
     size_t mindepth;
     size_t depth;
     char *path;
+    int freepath;
 };
 
 static RECDIR_FRAME *recdirtop(RECDIR *recdir);
@@ -79,7 +80,7 @@ recdirpop(RECDIR *recdir)
 
     assert(recdir->depth > 0);
     top = recdirtop(recdir);
-    free(top->path);
+    free((char *)top->path);
     excode = closedir(top->dir);
     if (--recdir->depth < recdir->frames_sz - FRAMES_REALLOC_SIZE) {
         recdir->frames_sz -= FRAMES_REALLOC_SIZE;
@@ -161,6 +162,7 @@ recdirread(RECDIR *recdir)
             continue;
         }
 
+        free(recdir->path);
         recdir->path = makepath(top->path, ent->d_name);
 
         if (ent->d_type == DT_LNK || ent->d_type == DT_UNKNOWN) {
@@ -191,7 +193,7 @@ recdirread(RECDIR *recdir)
         case DT_REG:
             if (recdir->mindepth > recdir->depth)
                 continue;
-            return recdir->path;
+            return strdup(recdir->path);
         default:
             RECDIR_LOG("SKIP", recdir->path);
         }
