@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <errno.h>
 
+#include <pthread.h>
 #include <sqlite3.h>
 
 #include "sha256.h"
@@ -15,6 +16,7 @@
 struct SQL {
     sqlite3 *database;
     sqlite3_stmt *stmt;
+    pthread_mutex_t mtx;
     int insertc;
 };
 
@@ -30,6 +32,7 @@ sql_open(SQL **sql, const char *path)
     int errcode;
 
     *sql = ecalloc(1, sizeof(struct SQL));
+    pthread_mutex_init(&(*sql)->mtx, NULL);
 
     SQL_TRY(sqlite3_open(path, &(*sql)->database));
     SQL_TRY(sqlite3_exec((*sql)->database, create_cmd, NULL, NULL, NULL));
@@ -44,6 +47,7 @@ sql_insert(SQL *sql, const char *filename, char unsigned hash[])
 {
     int errcode;
 
+    pthread_mutex_lock(&sql->mtx);
     sqlite3_bind_text(sql->stmt, 1, filename, -1, NULL);
     sqlite3_bind_blob(sql->stmt, 2, hash, SHA256_LENGTH, NULL);
 
@@ -55,6 +59,7 @@ sql_insert(SQL *sql, const char *filename, char unsigned hash[])
         sql->insertc = 0;
     }
 
+    pthread_mutex_unlock(&sql->mtx);
     return 0;
 }
 
@@ -70,5 +75,6 @@ sql_close(SQL *sql)
     sqlite3_exec(sql->database, "COMMIT", NULL, NULL, NULL);
     if (sql->stmt) sqlite3_finalize(sql->stmt);
     if (sql->database) sqlite3_close(sql->database);
+    pthread_mutex_destroy(&sql->mtx);
     free(sql);
 }
