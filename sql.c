@@ -34,7 +34,7 @@ sql_open(SQL **sql, const char *path)
     *sql = ecalloc(1, sizeof(struct SQL));
     pthread_mutex_init(&(*sql)->mtx, NULL);
 
-    SQL_TRY(sqlite3_open(path, &(*sql)->database));
+    SQL_TRY(sqlite3_open_v2(path, &(*sql)->database, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_NOMUTEX, NULL));
     SQL_TRY(sqlite3_exec((*sql)->database, create_cmd, NULL, NULL, NULL));
     SQL_TRY(sqlite3_prepare_v2((*sql)->database, insert_cmd, -1, &(*sql)->stmt, NULL));
     SQL_TRY(sqlite3_exec((*sql)->database, "BEGIN", NULL, NULL, NULL));

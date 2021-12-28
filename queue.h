@@ -3,19 +3,27 @@
 
 #include <stddef.h>
 
-struct queue_head {
-    struct queue_head *next, *prev;
+#include <pthread.h>
+
+struct queue_link {
+    struct queue_link *next, *prev;
 };
 
-#define QUEUE_HEAD_INIT(name) { &(name), &(name) }
-#define queue_head_init(head) (head)->next = (head)->prev = head;
+struct queue_head {
+    pthread_mutex_t mtx;
+    pthread_cond_t cond;
+    struct queue_link queue;
+};
+
 #define queue_entry(ptr, type, member) \
     (type *)((char *)(ptr) - offsetof(type, member))
 #define dequeue_entry(head, type, member) \
     queue_entry(dequeue(head), type, member)
 
-void enqueue(struct queue_head *new, struct queue_head *head);
-struct queue_head * dequeue(struct queue_head *head);
+void queue_head_init(struct queue_head *head);
+void enqueue(struct queue_link *new, struct queue_head *head);
+struct queue_link *dequeue(struct queue_head *head);
 int queue_empty(const struct queue_head *head);
+void queue_head_destroy(struct queue_head *head);
 
 #endif

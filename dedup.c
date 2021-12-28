@@ -4,26 +4,46 @@
 #include <string.h>
 
 #include "args.h"
+#include "queue.h"
 #include "recdir.h"
 #include "sha256.h"
 #include "sql.h"
-#include "task.h"
 #include "util.h"
 
 SQL *sql;
 Args args;
+
+struct task_entry {
+    const char *fpath;
+    struct queue_link link;
+};
+
+void
+task_add(const char *fpath, struct queue_head *head)
+{
+    struct task_entry *entry = emalloc(sizeof(struct task_entry));
+    entry->fpath = fpath;
+    enqueue(&entry->link, head);
+}
+
+void
+task_free(struct task_entry *entry)
+{
+    free((char *)entry->fpath);
+    free(entry);
+}
 
 void *
 process_file(void *data)
 {
     unsigned char hash[SHA256_LENGTH];
     char hash_cstr[SHA256_CSTR_LENGTH];
-    struct task_head *tasks = data;
+    struct queue_head *tasks = data;
     struct task_entry *entry;
     FILE *fp;
 
     while (1) {
-        entry = task_get(tasks);
+        entry = dequeue_entry(tasks, struct task_entry, link);
 
         if (entry->fpath == NULL)
             break;
@@ -62,13 +82,13 @@ int
 main(int argc, char *argv[])
 {
     pthread_t threads[THREADS];
-    struct task_head tasks;
+    struct queue_head tasks;
     RECDIR *recdir = NULL;
     int excode = 0;
     char *fpath;
     size_t i;
 
-    task_head_init(&tasks);
+    queue_head_init(&tasks);
 
     argsparse(argc, argv, &args);
 
@@ -107,7 +127,7 @@ cleanup:
     if (sql) sql_close(sql);
     if (recdir) recdirclose(recdir);
     argsfree(&args);
-    task_head_free(&tasks);
+    queue_head_destroy(&tasks);
 
     if (errno != 0)
         die("Could not read directory:");
