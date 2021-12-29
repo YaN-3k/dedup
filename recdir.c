@@ -98,23 +98,22 @@ recdirtop(RECDIR *recdir)
 }
 
 RECDIR *
-recdiropen(const char *path, regex_t *exclude_reg, size_t maxdepth,
-           size_t mindepth, int verbose)
+recdiropen(const struct args *args)
 {
     RECDIR *recdir = ecalloc(1, sizeof(struct RECDIR));
 
-    if (recdirpush(recdir, path) != 0) {
+    if (recdirpush(recdir, args->path) != 0) {
         free(recdir);
         return NULL;
     }
 
-    if (verbose & VERBOSE_STACK)
-        recdir->fmt = (verbose & VERBOSE_HASH) ? "%-64s  %s\n" : "%-10s  %s\n";
+    if (args->verbose & VERBOSE_STACK)
+        recdir->fmt = (args->verbose & VERBOSE_HASH) ? "%-64s  %s\n" : "%-10s  %s\n";
 
-    recdir->maxdepth = maxdepth;
-    recdir->mindepth = mindepth;
-    recdir->exclude_reg = exclude_reg;
-    RECDIR_LOG("OPEN", path);
+    recdir->maxdepth = args->maxdepth;
+    recdir->mindepth = args->mindepth;
+    recdir->exclude_reg = args->exclude_reg;
+    RECDIR_LOG("OPEN", args->path);
 
     return recdir;
 }

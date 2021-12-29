@@ -25,7 +25,7 @@ usage(const char *argv0)
 }
 
 void
-argsparse(int argc, char *argv[], Args *args)
+argsparse(int argc, char *argv[], struct args *args)
 {
     const char *exclude_reg = NULL;
     size_t errlen;
@@ -99,7 +99,7 @@ argsparse(int argc, char *argv[], Args *args)
 }
 
 void
-argsfree(Args *args)
+argsfree(struct args *args)
 {
     if (args->exclude_reg) {
         regfree(args->exclude_reg);

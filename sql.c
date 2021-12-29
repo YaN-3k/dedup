@@ -13,7 +13,7 @@
 #define INSERT_LIM 1024
 #define SQL_TRY(exp) if ((errcode = exp)) return errcode
 
-struct SQL {
+struct sql {
     sqlite3 *database;
     sqlite3_stmt *stmt;
     pthread_mutex_t mtx;
@@ -21,7 +21,7 @@ struct SQL {
 };
 
 int
-sql_open(SQL **sql, const char *path)
+sql_open(sql_t **sql, const char *path)
 {
     const char *create_cmd = "CREATE TABLE IF NOT EXISTS resources("
                             "  res_path TEXT NOT NULL UNIQUE,      "
@@ -31,7 +31,7 @@ sql_open(SQL **sql, const char *path)
     const char *insert_cmd = "REPLACE INTO resources VALUES(?, ?)";
     int errcode;
 
-    *sql = ecalloc(1, sizeof(struct SQL));
+    *sql = ecalloc(1, sizeof(sql_t));
     pthread_mutex_init(&(*sql)->mtx, NULL);
 
     SQL_TRY(sqlite3_open_v2(path, &(*sql)->database, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_NOMUTEX, NULL));
@@ -43,7 +43,7 @@ sql_open(SQL **sql, const char *path)
 }
 
 int
-sql_insert(SQL *sql, const char *filename, char unsigned hash[])
+sql_insert(sql_t *sql, const char *filename, char unsigned hash[])
 {
     int errcode;
 
@@ -64,13 +64,13 @@ sql_insert(SQL *sql, const char *filename, char unsigned hash[])
 }
 
 const char *
-sql_errmsg(SQL *sql)
+sql_errmsg(sql_t *sql)
 {
     return sqlite3_errmsg(sql->database);
 }
 
 void
-sql_close(SQL *sql)
+sql_close(sql_t *sql)
 {
     sqlite3_exec(sql->database, "COMMIT", NULL, NULL, NULL);
     if (sql->stmt) sqlite3_finalize(sql->stmt);

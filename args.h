@@ -9,7 +9,7 @@ enum {
     VERBOSE_HASH   = 1 << 1
 };
 
-typedef struct {
+struct args {
     regex_t *exclude_reg;
     const char *path;
     const char *db;
@@ -18,9 +18,9 @@ typedef struct {
     size_t nbytes;
     int verbose;
     int realpath;
-} Args;
+};
 
-void argsparse(int argc, char *argv[], Args *args);
-void argsfree(Args *args);
+void argsparse(int argc, char *argv[], struct args *args);
+void argsfree(struct args *args);
 
 #endif
