@@ -15,15 +15,15 @@ Args args;
 
 struct task_entry {
     const char *fpath;
-    struct queue_link link;
+    queue_lnk lnk;
 };
 
 void
-task_add(const char *fpath, struct queue_head *head)
+task_add(const char *fpath, queue_t *queue)
 {
     struct task_entry *entry = emalloc(sizeof(struct task_entry));
     entry->fpath = fpath;
-    enqueue(&entry->link, head);
+    enqueue(&entry->lnk, queue);
 }
 
 void
@@ -34,16 +34,16 @@ task_free(struct task_entry *entry)
 }
 
 void *
-process_file(void *data)
+process_file(void *queue)
 {
     unsigned char hash[SHA256_LENGTH];
     char hash_cstr[SHA256_CSTR_LENGTH];
-    struct queue_head *tasks = data;
+    queue_t *tasks = queue;
     struct task_entry *entry;
     FILE *fp;
 
     while (1) {
-        entry = dequeue_entry(tasks, struct task_entry, link);
+        entry = dequeue(tasks, struct task_entry, lnk);
 
         if (entry->fpath == NULL)
             break;
@@ -67,7 +67,6 @@ process_file(void *data)
 
         if (sql != NULL && sql_insert(sql, entry->fpath, hash) != 0) {
             fprintf(stderr, "sqlite3: %s\n", sql_errmsg(sql));
-            /*fprintf(stderr, "terminating...\n");*/
             errno = 0;
             break;
         }
@@ -82,13 +81,13 @@ int
 main(int argc, char *argv[])
 {
     pthread_t threads[THREADS];
-    struct queue_head tasks;
     RECDIR *recdir = NULL;
+    queue_t *tasks = NULL;
     int excode = 0;
     char *fpath;
     size_t i;
 
-    queue_head_init(&tasks);
+    queue_init(&tasks);
 
     argsparse(argc, argv, &args);
 
@@ -112,13 +111,13 @@ main(int argc, char *argv[])
     }
 
     for (i = 0; i < THREADS; i++)
-        pthread_create(threads + i, NULL, process_file, &tasks);
+        pthread_create(threads + i, NULL, process_file, tasks);
 
     while ((fpath = recdirread(recdir)) != NULL)
-        task_add(fpath, &tasks);
+        task_add(fpath, tasks);
 
     for (i = 0; i < THREADS; i++)
-        task_add(NULL, &tasks);
+        task_add(NULL, tasks);
     
     for (i = 0; i < THREADS; i++)
         pthread_join(threads[i], NULL);
@@ -127,7 +126,7 @@ cleanup:
     if (sql) sql_close(sql);
     if (recdir) recdirclose(recdir);
     argsfree(&args);
-    queue_head_destroy(&tasks);
+    queue_destroy(&tasks);
 
     if (errno != 0)
         die("Could not read directory:");

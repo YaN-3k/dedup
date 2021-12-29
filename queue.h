@@ -5,25 +5,21 @@
 
 #include <pthread.h>
 
-struct queue_link {
-    struct queue_link *next, *prev;
-};
+typedef struct queue_lnk {
+    struct queue_lnk *next, *prev;
+} queue_lnk;
 
-struct queue_head {
-    pthread_mutex_t mtx;
-    pthread_cond_t cond;
-    struct queue_link queue;
-};
+typedef struct queue_t queue_t;
 
 #define queue_entry(ptr, type, member) \
     (type *)((char *)(ptr) - offsetof(type, member))
-#define dequeue_entry(head, type, member) \
-    queue_entry(dequeue(head), type, member)
+#define dequeue(queue, type, member) \
+    queue_entry(dequeue_lnk(queue), type, member)
 
-void queue_head_init(struct queue_head *head);
-void enqueue(struct queue_link *new, struct queue_head *head);
-struct queue_link *dequeue(struct queue_head *head);
-int queue_empty(const struct queue_head *head);
-void queue_head_destroy(struct queue_head *head);
+void queue_init(queue_t **queue);
+void enqueue(queue_lnk *new, queue_t *queue);
+queue_lnk *dequeue_lnk(queue_t *queue);
+int queue_empty(const queue_t *queue);
+void queue_destroy(queue_t **queue);
 
 #endif
