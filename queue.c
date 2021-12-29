@@ -10,6 +10,9 @@ struct queue_t {
     queue_lnk *lnk;
 };
 
+static void queue_add(queue_lnk *new, queue_lnk *prev, queue_lnk *next);
+static void queue_del(queue_lnk *prev, queue_lnk *next);
+
 void
 queue_init(queue_t **queue)
 {
@@ -30,10 +33,8 @@ queue_destroy(queue_t **queue)
     *queue = NULL;
 }
 
-static void
-queue_add(queue_lnk *new,
-          queue_lnk *prev,
-          queue_lnk *next)
+void
+queue_add(queue_lnk *new, queue_lnk *prev, queue_lnk *next)
 {
     next->prev = new;
     new->next = next;
@@ -50,7 +51,7 @@ enqueue(queue_lnk *new, queue_t *queue)
     pthread_cond_signal(&queue->cond);
 }
 
-static void
+void
 queue_del(queue_lnk *prev, queue_lnk *next)
 {
     next->prev = prev;

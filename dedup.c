@@ -1,4 +1,5 @@
 #include <errno.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -9,6 +10,8 @@
 #include "sha256.h"
 #include "sql.h"
 #include "util.h"
+
+int terminate;
 
 struct data {
     sql_t *sql;
@@ -23,6 +26,23 @@ struct task_entry {
     unsigned char hash[SHA256_LENGTH];
     char hash_cstr[SHA256_CSTR_LENGTH];
 };
+
+static void sigint_handler(int sig);
+
+static void task_add(const char *fpath, queue_t *queue);
+static void task_free(struct task_entry *entry);
+static void task_queue_destroy(queue_t **queue);
+
+static void *process_file(void *datap);
+static void *write_database(void *datap);
+
+void
+sigint_handler(int sig)
+{
+    (void) sig;
+    fputs("terminating...\n", stderr);
+    terminate = 1;
+}
 
 void
 task_add(const char *fpath, queue_t *queue)
@@ -39,6 +59,15 @@ task_free(struct task_entry *entry)
     free(entry);
 }
 
+void
+task_queue_destroy(queue_t **queue)
+{
+    while (!queue_empty(*queue))
+        task_free(dequeue(*queue, struct task_entry, lnk));
+
+    queue_destroy(queue);
+}
+
 void *
 process_file(void *datap)
 {
@@ -46,7 +75,12 @@ process_file(void *datap)
     struct task_entry *entry;
     FILE *fp;
 
-    while ((entry = dequeue(data->read_q, struct task_entry, lnk))->fpath) {
+    while (1) {
+        entry = dequeue(data->read_q, struct task_entry, lnk);
+
+        if (terminate > 0 || entry->fpath == NULL)
+            break;
+
         if ((fp = fopen(entry->fpath, "r")) == NULL) {
             if (errno != 0) {
                 perror(entry->fpath);
@@ -80,9 +114,15 @@ write_database(void *datap)
     struct data *data = datap;
     struct task_entry *entry;
 
-    while ((entry = dequeue(data->write_q, struct task_entry, lnk))->fpath) {
+    while (1) {
+        entry = dequeue(data->write_q, struct task_entry, lnk);
+
+        if (terminate > 0 || entry->fpath == NULL)
+            break;
+
         if (sql_insert(data->sql, entry->fpath, entry->hash) != 0) {
             fprintf(stderr, "sqlite3: %s\n", sql_errmsg(data->sql));
+            terminate = 1;
             errno = 0;
             break;
         }
@@ -90,32 +130,33 @@ write_database(void *datap)
     }
 
     task_free(entry);
-    pthread_exit(0);
+    return 0;
 }
 
 int
 main(int argc, char *argv[])
 {
     pthread_t threads[THREADS + 1];
-    RECDIR *recdir = 0;
     struct data data = {0};
-    int excode = 0;
+    RECDIR *recdir = 0;
     char *fpath;
     size_t i;
+
+    signal(SIGINT, sigint_handler);
 
     argsparse(argc, argv, &data.args);
 
     if (data.args.db && sql_open(&data.sql, data.args.db) != 0) {
         fprintf(stderr, "sqlite3: %s\n", sql_errmsg(data.sql));
+        terminate = 1;
         errno = 0;
-        excode = 1;
         goto cleanup;
     }
     
     if ((recdir = recdiropen(&data.args)) == NULL) {
         perror(data.args.path);
+        terminate = 1;
         errno = 0;
-        excode = 1;
         goto cleanup;
     }
 
@@ -141,8 +182,8 @@ main(int argc, char *argv[])
 
 
 cleanup:
-    if (data.write_q) queue_destroy(&data.write_q);
-    if (data.read_q) queue_destroy(&data.read_q);
+    if (data.write_q) task_queue_destroy(&data.write_q);
+    if (data.read_q) task_queue_destroy(&data.read_q);
     if (data.sql) sql_close(data.sql);
     if (recdir) recdirclose(recdir);
     argsfree(&data.args);
@@ -150,5 +191,5 @@ cleanup:
     if (errno != 0)
         die("Could not read directory:");
 
-    return excode;
+    return terminate;
 }
