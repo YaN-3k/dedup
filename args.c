@@ -1,11 +1,10 @@
-#include "args.h"
-
 #include <errno.h>
+#include <regex.h>
 #include <stdio.h>
 #include <stdlib.h>
-
 #include <unistd.h>
 
+#include "args.h"
 #include "util.h"
 
 #define ARGS_NUMBER(arg)                                           \
@@ -23,6 +22,8 @@ usage(const char *argv0)
         " [-M maxdepth] [-e exclude] directory [database]", argv0);
     exit(1);
 }
+
+#define nil ((void *)0)
 
 void
 argsparse(int argc, char *argv[], struct args *args)

@@ -1,9 +1,10 @@
-#include "sha256.h"
-
+#include <openssl/sha.h>
 #include <stdio.h>
 
+#include "sha256.h"
+
 void
-hash2cstr(unsigned char hash[], char cstr[])
+hash2cstr(const unsigned char hash[], char cstr[])
 {
     int i;
 

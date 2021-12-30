@@ -1,10 +1,3 @@
-#ifndef QUEUE_H__
-#define QUEUE_H__
-
-#include <stddef.h>
-
-#include <pthread.h>
-
 typedef struct queue_lnk {
     struct queue_lnk *next, *prev;
 } queue_lnk;
@@ -21,5 +14,3 @@ void enqueue(queue_lnk *new, queue_t *queue);
 queue_lnk *dequeue_lnk(queue_t *queue);
 int queue_empty(const queue_t *queue);
 void queue_destroy(queue_t **queue);
-
-#endif

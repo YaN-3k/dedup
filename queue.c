@@ -1,7 +1,7 @@
-#include "queue.h"
-
+#include <pthread.h>
 #include <stdlib.h>
 
+#include "queue.h"
 #include "util.h"
 
 struct queue_t {

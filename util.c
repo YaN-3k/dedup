@@ -1,9 +1,9 @@
-#include "util.h"
-
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include "util.h"
 
 void
 die(const char *fmt, ...)

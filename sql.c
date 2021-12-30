@@ -1,13 +1,11 @@
-#include "sql.h"
-
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <errno.h>
-
-#include <pthread.h>
+#include <openssl/sha.h>
 #include <sqlite3.h>
 
 #include "sha256.h"
+#include "sql.h"
 #include "util.h"
 
 #define INSERT_LIM 1024
@@ -27,23 +25,26 @@ sql_open(sql_t **sql, const char *path)
                             "  res_path TEXT NOT NULL UNIQUE,      "
                             "  res_hash BLOB NOT NULL              "
                             ")                                     ";
-
     const char *insert_cmd = "REPLACE INTO resources VALUES(?, ?)";
+    const int open_flags = SQLITE_OPEN_READWRITE
+                         | SQLITE_OPEN_CREATE
+                         | SQLITE_OPEN_NOMUTEX;
     int errcode;
 
     *sql = ecalloc(1, sizeof(sql_t));
     pthread_mutex_init(&(*sql)->mtx, NULL);
 
-    SQL_TRY(sqlite3_open_v2(path, &(*sql)->database, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_NOMUTEX, NULL));
+    SQL_TRY(sqlite3_open_v2(path, &(*sql)->database, open_flags, NULL));
     SQL_TRY(sqlite3_exec((*sql)->database, create_cmd, NULL, NULL, NULL));
-    SQL_TRY(sqlite3_prepare_v2((*sql)->database, insert_cmd, -1, &(*sql)->stmt, NULL));
+    SQL_TRY(sqlite3_prepare_v2((*sql)->database, insert_cmd, -1,
+                                &(*sql)->stmt, NULL));
     SQL_TRY(sqlite3_exec((*sql)->database, "BEGIN", NULL, NULL, NULL));
 
     return 0;
 }
 
 int
-sql_insert(sql_t *sql, const char *filename, char unsigned hash[])
+sql_insert(sql_t *sql, const char *filename, const char unsigned hash[])
 {
     int errcode;
 
@@ -64,7 +65,7 @@ sql_insert(sql_t *sql, const char *filename, char unsigned hash[])
 }
 
 const char *
-sql_errmsg(sql_t *sql)
+sql_errmsg(const sql_t *sql)
 {
     return sqlite3_errmsg(sql->database);
 }

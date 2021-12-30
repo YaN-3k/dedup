@@ -1,8 +1,11 @@
 #include <errno.h>
+#include <errno.h>
+#include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
+#include <openssl/sha.h>
+#include <regex.h>
 
 #include "args.h"
 #include "queue.h"
@@ -10,8 +13,6 @@
 #include "sha256.h"
 #include "sql.h"
 #include "util.h"
-
-int terminate;
 
 struct data {
     sql_t *sql;
@@ -35,6 +36,8 @@ static void task_queue_destroy(queue_t **queue);
 
 static void *process_file(void *datap);
 static void *write_database(void *datap);
+
+static int terminate = 0;
 
 void
 sigint_handler(int sig)
@@ -136,7 +139,8 @@ write_database(void *datap)
 int
 main(int argc, char *argv[])
 {
-    pthread_t threads[THREADS + 1];
+    pthread_t threads[THREADS + 1] = {0};
+    size_t threads_sz = 0;
     struct data data = {0};
     RECDIR *recdir = 0;
     char *fpath;
@@ -163,25 +167,37 @@ main(int argc, char *argv[])
     queue_init(&data.read_q);
     queue_init(&data.write_q);
 
-    for (i = 0; i < THREADS; i++)
-        pthread_create(threads + i, NULL, process_file, &data);
+    for (threads_sz = 0; threads_sz < THREADS; threads_sz++) {
+        if (pthread_create(threads + threads_sz, NULL, process_file, &data)) {
+            perror("failed to create thread");
+            terminate = 1;
+            errno = 0;
+            goto cleanup;
+        }
+    }
 
-    pthread_create(threads + THREADS, NULL, write_database, &data);
+    if (pthread_create(threads + threads_sz, NULL, write_database, &data)) {
+        perror("failed to create thread");
+        terminate = 1;
+        errno = 0;
+        goto cleanup;
+    }
 
-    while ((fpath = recdirread(recdir)) != NULL)
+    while (!terminate && (fpath = recdirread(recdir)) != NULL)
         task_add(fpath, data.read_q);
 
-    for (i = 0; i < THREADS; i++)
+cleanup:
+    for (i = 0; i < threads_sz; i++)
         task_add(NULL, data.read_q);
 
-    for (i = 0; i < THREADS; i++)
+    for (i = 0; i < threads_sz; i++)
         pthread_join(threads[i], NULL);
 
-    task_add(NULL, data.write_q);
-    pthread_join(threads[THREADS], NULL);
+    if (threads[threads_sz]) {
+        task_add(NULL, data.write_q);
+        pthread_join(threads[threads_sz], NULL);
+    }
 
-
-cleanup:
     if (data.write_q) task_queue_destroy(&data.write_q);
     if (data.read_q) task_queue_destroy(&data.read_q);
     if (data.sql) sql_close(data.sql);
@@ -189,7 +205,7 @@ cleanup:
     argsfree(&data.args);
 
     if (errno != 0)
-        die("Could not read directory:");
+        die("could not read directory:");
 
     return terminate;
 }

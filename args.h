@@ -1,8 +1,3 @@
-#ifndef ARGS_H__
-#define ARGS_H__
-
-#include <regex.h>
-
 enum {
     VERBOSE_SILENT = 0,
     VERBOSE_STACK  = 1 << 0,
@@ -22,5 +17,3 @@ struct args {
 
 void argsparse(int argc, char *argv[], struct args *args);
 void argsfree(struct args *args);
-
-#endif

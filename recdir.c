@@ -1,19 +1,15 @@
-#include "recdir.h"
-
 #include <assert.h>
+#include <dirent.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-#include <dirent.h>
-#include <regex.h>
 #include <sys/stat.h>
-#include <sys/types.h>
-#include <unistd.h>
+#include <regex.h>
 
-#include "util.h"
 #include "args.h"
+#include "recdir.h"
+#include "util.h"
 
 #define FRAMES_REALLOC_SIZE 16
 #define RECDIR_LOG(op, path) if (recdir->fmt) printf(recdir->fmt, op, path)
@@ -57,7 +53,7 @@ recdirpush(RECDIR *recdir, const char *path)
     DIR *dir;
 
     if ((dir = opendir(path)) == NULL)
-        return 1;
+        return -1;
 
     if (++recdir->depth >= recdir->frames_sz) {
         recdir->frames_sz += FRAMES_REALLOC_SIZE;
