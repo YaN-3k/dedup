@@ -5,7 +5,7 @@ CPPFLAGS = -D_DEFAULT_SOURCE -DVERSION=\"${VERSION}\" -DTHREADS=${THREADS}
 CFLAGS   = -ansi -pedantic -Wextra -Wall ${CPPFLAGS} -g
 LDFLAGS  = -lcrypto -lssl -lsqlite3 -lpthread
 
-SRC = dedup.c args.c recdir.c sha256.c util.c sql.c queue.c
+SRC = dedup.c arg.c rcdir.c sha256.c util.c sql.c queue.c
 OBJ = ${SRC:.c=.o}
 
 all: options dedup

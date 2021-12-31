@@ -1,8 +1,4 @@
-#include <stdarg.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
+#include "libc.h"
 #include "util.h"
 
 void
@@ -13,43 +9,43 @@ die(const char *fmt, ...)
 	va_start(ap, fmt);
 	vfprintf(stderr, fmt, ap);
 	va_end(ap);
-
-	if (fmt[0] && fmt[strlen(fmt) - 1] == ':') {
+	if(fmt[0] && fmt[strlen(fmt) - 1] == ':') {
 		fputc(' ', stderr);
 		perror(NULL);
-	} else {
-		fputc('\n', stderr);
-	}
-
+	} else fputc('\n', stderr);
 	exit(1);
 }
 
 void *
-emalloc(size_t size)
+xmalloc(size_t size)
 {
 	void *p;
 
-	if (!(p = malloc(size)))
-		die("malloc:");
+	if(!(p = malloc(size))) die("malloc:");
 	return p;
 }
 
 void *
-erealloc(void *ptr, size_t size)
+xrealloc(void *ptr, size_t size)
 {
 	void *p;
 
-	if (!(p = realloc(ptr, size)))
-		die("realloc:");
+	if(!(p = realloc(ptr, size))) die("realloc:");
 	return p;
 }
 
 void *
-ecalloc(size_t nmemb, size_t size)
+xcalloc(size_t nmemb, size_t size)
 {
 	void *p;
 
-	if (!(p = calloc(nmemb, size)))
-		die("calloc:");
+	if(!(p = calloc(nmemb, size))) die("calloc:");
 	return p;
+}
+
+char *
+xstrdup(const char *s)
+{
+	if(!(s = strdup(s))) die("strdup:");
+	return (char *)s;
 }

@@ -1,4 +1,5 @@
 void die(const char *fmt, ...);
-void *emalloc(size_t size);
-void *erealloc(void *ptr, size_t size);
-void *ecalloc(size_t nmemb, size_t size);
+void *xmalloc(size_t size);
+void *xrealloc(void *ptr, size_t size);
+void *xcalloc(size_t nmemb, size_t size);
+char *xstrdup(const char *s);

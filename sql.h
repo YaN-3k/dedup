@@ -1,6 +1,6 @@
-typedef struct sql sql_t;
+typedef struct SQL SQL;
 
-int sql_open(sql_t **sql, const char *filepath);
-int sql_insert(sql_t *sql, const char *filename, const char unsigned hash[]);
-const char *sql_errmsg(const sql_t *sql);
-void sql_close(sql_t *sql);
+int sql_open(SQL **sql, const char *filepath);
+int sql_insert(SQL *sql, const char *filename, const uchar hash[]);
+const char *sql_errmsg(const SQL *sql);
+void sql_close(SQL *sql);
